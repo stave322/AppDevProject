@@ -54,6 +54,7 @@ class TodayTab extends StatelessWidget {
     final nx = store.next();
     final r = nx == null ? null : store.routine(nx['r']);
     final n = store.notes().length;
+    final calorieGoal = (store.nutritionGoals['calories'] as num).toInt();
     final name = (store.d['name'] as String?)?.trim() ?? '';
     return tabBody([
       hdr(
@@ -123,7 +124,7 @@ class TodayTab extends StatelessWidget {
             Icons.restaurant,
             '${store.kcal()} kcal',
             'Food & meals',
-            store.kcal() / 2100,
+            store.kcal() / calorieGoal,
             () => go(c, const FoodScreen()),
           ),
           const SizedBox(width: 10),

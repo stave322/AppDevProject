@@ -1,51 +1,392 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+
 import '../store/store.dart';
 import '../widgets/shared_widgets.dart';
+import 'meal_picker_screen.dart';
 
 class FoodScreen extends StatelessWidget {
   const FoodScreen({super.key});
+
+  Future<void> _editNutritionGoals(BuildContext context) async {
+    final updated = await showModalBottomSheet<Map<String, int>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _NutritionGoalsSheet(goals: store.nutritionGoals),
+    );
+    if (updated == null || !context.mounted) return;
+    store.d['nutritionGoals'] = updated;
+    store.save();
+  }
+
   @override
   Widget build(BuildContext context) => live((c) {
-        final k = store.kcal();
-        return screen([
-          hdr(c, 'Food & meals', 'Fuel your day.', back: true),
-          card(
-            child: Row(children: [
-              SizedBox(width: 110, height: 110, child: Stack(alignment: Alignment.center, children: [
-                SizedBox.expand(child: CircularProgressIndicator(value: (k / 2100).clamp(0.0, 1.0), strokeWidth: 10, color: kPri, backgroundColor: kLn)),
-                Column(mainAxisSize: MainAxisSize.min, children: [Text('$k', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)), const Text('kcal eaten', style: muted)]),
-              ])),
-              const SizedBox(width: 18),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${max(0, 2100 - k)}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-                const Text('kcal remaining · goal 2,100', style: muted),
-              ]),
-            ]),
+    final calories = store.kcal();
+    final goals = store.nutritionGoals;
+    final calorieGoal = (goals['calories'] as num).toInt();
+    final remaining = (calorieGoal - calories).clamp(0, calorieGoal);
+    final meals = store.meals;
+
+    return screen([
+      hdr(c, 'Food & meals', 'Fuel your day.', back: true),
+      card(
+        color: tintOf(c),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 112,
+              height: 112,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox.expand(
+                    child: CircularProgressIndicator(
+                      value: (calories / calorieGoal).clamp(0.0, 1.0),
+                      strokeWidth: 10,
+                      strokeCap: StrokeCap.round,
+                      color: primaryOf(c),
+                      backgroundColor: Theme.of(c).colorScheme.outlineVariant
+                          .withValues(alpha: .55),
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$calories',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Text('kcal eaten', style: muted),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$remaining',
+                    style: TextStyle(
+                      color: primaryOf(c),
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Text('kcal remaining', style: muted),
+                  const SizedBox(height: 4),
+                  Text('Daily goal · $calorieGoal kcal', style: muted),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      h3(
+        'Daily nutrients',
+        trailing: TextButton.icon(
+          onPressed: () => _editNutritionGoals(c),
+          icon: const Icon(Icons.tune, size: 17),
+          label: const Text('Edit goals'),
+        ),
+      ),
+      card(
+        child: Column(
+          children: [
+            _nutrientRow(
+              c,
+              'Protein',
+              store.macro('p'),
+              (goals['protein'] as num).toInt(),
+              Icons.egg_alt_outlined,
+            ),
+            const SizedBox(height: 14),
+            _nutrientRow(
+              c,
+              'Carbs',
+              store.macro('c'),
+              (goals['carbs'] as num).toInt(),
+              Icons.grain,
+            ),
+            const SizedBox(height: 14),
+            _nutrientRow(
+              c,
+              'Fat',
+              store.macro('f'),
+              (goals['fat'] as num).toInt(),
+              Icons.water_drop_outlined,
+            ),
+          ],
+        ),
+      ),
+      h3(
+        "Today's meals",
+        trailing: Text('${meals.length} logged', style: muted),
+      ),
+      if (meals.isEmpty)
+        card(
+          child: Column(
+            children: [
+              Icon(
+                Icons.restaurant_menu_outlined,
+                size: 36,
+                color: primaryOf(c),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Nothing logged yet',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Add a meal to see your daily nutrition here.',
+                textAlign: TextAlign.center,
+                style: muted,
+              ),
+            ],
           ),
-          card(child: Column(children: [
-            for (final m in [['Protein', 'p', 140], ['Carbs', 'c', 220], ['Fat', 'f', 65]])
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${m[0]}  ${store.macro(m[1] as String)} / ${m[2]} g', style: muted), bar(store.macro(m[1] as String) / (m[2] as int))]),
-          ])),
-          h3("Today's meals", trailing: Text('${store.meals.length} logged', style: muted)),
-          for (int i = 0; i < store.meals.length; i++)
-            card(child: Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(store.meals[i]['t'], style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text(store.meals[i]['n'], style: muted),
-                Text('${store.meals[i]['k']} kcal', style: const TextStyle(color: kPri, fontWeight: FontWeight.w700)),
-              ])),
-              IconButton(onPressed: () { store.meals.removeAt(i); store.save(); }, icon: const Icon(Icons.close, color: kRed)),
-            ])),
-          btn('+ Log food', () async {
-            final f = await form(c, 'Log food', [
-              F('t', 'Meal', 'Dinner', type: 'choice', opts: ['Breakfast', 'Lunch', 'Snack', 'Dinner']), F('n', 'What did you eat?', ''),
-              F('k', 'Calories (kcal)', '', type: 'number'), F('p', 'Protein g', '0', type: 'number'), F('c', 'Carbs g', '0', type: 'number'), F('f', 'Fat g', '0', type: 'number'),
-            ], ok: 'Log');
-            if (f == null || f['n']!.isEmpty || num_(f['k']) == 0) return;
-            store.meals.add({'t': f['t'], 'n': f['n'], 'k': num_(f['k']).round(), 'p': num_(f['p']).round(), 'c': num_(f['c']).round(), 'f': num_(f['f']).round()});
-            store.save();
-          }),
-        ]);
-      });
+        )
+      else
+        for (int i = 0; i < meals.length; i++) _mealCard(c, meals[i], i),
+      btn('+  Log food', () => go(c, const MealPickerScreen())),
+    ]);
+  });
+
+  Widget _nutrientRow(
+    BuildContext context,
+    String name,
+    int amount,
+    int goal,
+    IconData icon,
+  ) => Row(
+    children: [
+      Icon(icon, size: 19, color: primaryOf(context)),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text('$amount / $goal g', style: muted),
+              ],
+            ),
+            bar(amount / goal),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget _mealCard(BuildContext context, Map meal, int index) {
+    final description = meal['desc'] as String? ?? '';
+    return card(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: tintOf(context),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(
+              _mealIcon(meal['t'] as String? ?? ''),
+              color: primaryOf(context),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  meal['n'] as String? ?? 'Meal',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${meal['t']} · ${meal['k']} kcal',
+                  style: TextStyle(
+                    color: primaryOf(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(description, style: muted),
+                ],
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    _macroTag(context, 'P', meal['p']),
+                    _macroTag(context, 'C', meal['c']),
+                    _macroTag(context, 'F', meal['f']),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Remove meal',
+            onPressed: () {
+              store.meals.removeAt(index);
+              store.save();
+            },
+            icon: const Icon(Icons.close, color: kMut),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _macroTag(BuildContext context, String label, dynamic value) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: tintOf(context),
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: Text('$label ${value ?? 0}g', style: muted),
+      );
+
+  IconData _mealIcon(String type) => switch (type.toLowerCase()) {
+    'breakfast' => Icons.free_breakfast_outlined,
+    'lunch' => Icons.lunch_dining_outlined,
+    'snack' => Icons.cookie_outlined,
+    _ => Icons.dinner_dining_outlined,
+  };
+}
+
+class _NutritionGoalsSheet extends StatefulWidget {
+  final Map<String, dynamic> goals;
+
+  const _NutritionGoalsSheet({required this.goals});
+
+  @override
+  State<_NutritionGoalsSheet> createState() => _NutritionGoalsSheetState();
+}
+
+class _NutritionGoalsSheetState extends State<_NutritionGoalsSheet> {
+  late final _calories = TextEditingController(
+    text: '${widget.goals['calories']}',
+  );
+  late final _protein = TextEditingController(
+    text: '${widget.goals['protein']}',
+  );
+  late final _carbs = TextEditingController(text: '${widget.goals['carbs']}');
+  late final _fat = TextEditingController(text: '${widget.goals['fat']}');
+
+  @override
+  void dispose() {
+    _calories.dispose();
+    _protein.dispose();
+    _carbs.dispose();
+    _fat.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        4,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Daily nutrition goals',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Personalize your daily calorie and nutrient targets.',
+              style: muted,
+            ),
+            const SizedBox(height: 18),
+            _goalInput(
+              _calories,
+              'Calories',
+              'kcal',
+              Icons.local_fire_department_outlined,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _goalInput(
+                    _protein,
+                    'Protein',
+                    'g',
+                    Icons.egg_alt_outlined,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: _goalInput(_carbs, 'Carbs', 'g', Icons.grain)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _goalInput(_fat, 'Fat', 'g', Icons.water_drop_outlined),
+            const SizedBox(height: 18),
+            btn('Save nutrition goals', _save),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _goalInput(
+    TextEditingController controller,
+    String label,
+    String unit,
+    IconData icon,
+  ) => TextField(
+    controller: controller,
+    keyboardType: TextInputType.number,
+    decoration: InputDecoration(
+      labelText: label,
+      suffixText: unit,
+      prefixIcon: Icon(icon),
+    ),
+  );
+
+  void _save() {
+    final values = {
+      'calories': int.tryParse(_calories.text.trim()),
+      'protein': int.tryParse(_protein.text.trim()),
+      'carbs': int.tryParse(_carbs.text.trim()),
+      'fat': int.tryParse(_fat.text.trim()),
+    };
+    final valid = values.entries.every((entry) {
+      final value = entry.value;
+      if (value == null) return false;
+      return entry.key == 'calories'
+          ? value >= 500 && value <= 10000
+          : value >= 1 && value <= 1000;
+    });
+    if (!valid) {
+      snack(
+        context,
+        'Enter calories from 500–10000 and nutrient goals from 1–1000 g.',
+      );
+      return;
+    }
+    Navigator.pop(context, values.cast<String, int>());
+  }
 }

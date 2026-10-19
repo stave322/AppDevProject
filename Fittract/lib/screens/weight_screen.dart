@@ -50,14 +50,28 @@ class WeightScreen extends StatefulWidget {
 class _WeightState extends State<WeightScreen> {
   int per = 1;
   late final tw = TextEditingController(
-    text: (store.goal['w'] as num).toDouble() > 0 ? '${store.goal['w']}' : '',
+    text: (store.goal['w'] as num).toDouble() > 0
+        ? _displayWeight((store.goal['w'] as num).toDouble()).toStringAsFixed(1)
+        : '',
   );
   late final td = TextEditingController(text: '${store.goal['d']}');
+  late final weightInput = TextEditingController(
+    text: (store.d['weights'] as List).isEmpty
+        ? ''
+        : _displayWeight(store.lastW()).toStringAsFixed(1),
+  );
+
+  String get _unit => store.on('lb') ? 'lb' : 'kg';
+
+  double _displayWeight(double kg) => store.on('lb') ? kg * 2.2046 : kg;
+
+  double _weightInKg(double value) => store.on('lb') ? value / 2.2046 : value;
 
   @override
   void dispose() {
     tw.dispose();
     td.dispose();
+    weightInput.dispose();
     super.dispose();
   }
 
@@ -110,123 +124,260 @@ class _WeightState extends State<WeightScreen> {
                   : vals.length < 2
                   ? 'Log another weight to see your progress.'
                   : diff >= 0
-                  ? '${diff.toStringAsFixed(1)} kg down in this period.'
-                  : '${(-diff).toStringAsFixed(1)} kg up in this period.',
+                  ? '${store.wt(diff.abs())} down in this period.'
+                  : '${store.wt(diff.abs())} up in this period.',
               style: const TextStyle(color: kPri),
             ),
           ],
         ),
       ),
-      btn('+ Log weight', () async {
-        final f = await form(c, 'Log weight', [
-          F(
-            'w',
-            'Weight (kg)',
-            hasWeight ? store.lastW().toStringAsFixed(1) : '',
-            type: 'number',
-          ),
-        ], ok: 'Log');
-        if (f == null || !c.mounted) return;
-        final weight = num_(f['w']);
-        if (weight <= 0) {
-          snack(c, 'Enter a weight greater than zero.');
-          return;
-        }
-        final l = store.d['weights'] as List;
-        if (l.isEmpty && (store.goal['sw'] as num) == 0) {
-          store.goal['sw'] = weight;
-        }
-        l.removeWhere((x) => x[0] == today());
-        l.add([today(), weight]);
-        store.save();
-      }),
-      h3('Set your goals'),
       card(
+        color: tintOf(c),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: tw,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Target weight (kg)',
-                    ),
+                Icon(Icons.monitor_weight_outlined, color: primaryOf(c)),
+                const SizedBox(width: 9),
+                const Expanded(
+                  child: Text(
+                    "Log today's weight",
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: td,
-                    decoration: const InputDecoration(
-                      labelText: 'Target date (YYYY-MM-DD)',
-                    ),
-                  ),
-                ),
+                if (hasWeight) tag('LATEST ${store.wt(store.lastW())}'),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              !hasWeight
-                  ? 'Log your first weight to set your starting point.'
-                  : gw <= 0
-                  ? 'Set a target weight to track your goal.'
-                  : 'Start ${sw.toStringAsFixed(1)} kg · ${(prog * 100).round()}% of your journey',
+              'Record your progress and keep your trend up to date.',
               style: muted,
             ),
-            bar(prog),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Weekly workouts'),
-                Row(
-                  children: [
-                    IconButton.filledTonal(
-                      onPressed: () {
-                        store.goal['wk'] = max(
-                          1,
-                          (store.goal['wk'] as int) - 1,
-                        );
-                        store.save();
-                      },
-                      icon: const Icon(Icons.remove),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(
-                        '${store.goal['wk']}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
+            const SizedBox(height: 14),
+            TextField(
+              controller: weightInput,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Your weight',
+                hintText: 'Enter weight',
+                suffixText: _unit,
+                prefixIcon: const Icon(Icons.scale_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            btn('Save weight', () => _saveWeight(c)),
+          ],
+        ),
+      ),
+      h3('Weight goals'),
+      card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: tintOf(c),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.flag_outlined, color: primaryOf(c), size: 25),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          gw > 0 ? 'Your target' : 'Set a weight target',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          gw > 0
+                              ? '${store.wt(gw)}${td.text.isEmpty ? '' : ' · ${td.text}'}'
+                              : 'Choose a goal that feels right for you.',
+                          style: muted,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (gw > 0)
+                    Text(
+                      '${(prog * 100).round()}%',
+                      style: TextStyle(
+                        color: primaryOf(c),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    IconButton.filledTonal(
-                      onPressed: () {
-                        store.goal['wk'] = min(
-                          7,
-                          (store.goal['wk'] as int) + 1,
-                        );
-                        store.save();
-                      },
-                      icon: const Icon(Icons.add),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            btn('✓ Save goals', () {
-              store.goal['w'] = num_(tw.text) == 0 ? gw : num_(tw.text);
-              store.goal['d'] = td.text;
-              store.save();
-              snack(c, 'Goals saved ✓');
-            }),
+            if (gw > 0) ...[
+              const SizedBox(height: 10),
+              bar(prog),
+              Text(
+                sw > 0
+                    ? 'Starting weight · ${store.wt(sw)}'
+                    : 'Progress toward your target',
+                style: muted,
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: tw,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Target weight',
+                hintText: 'Enter target',
+                suffixText: _unit,
+                prefixIcon: const Icon(Icons.track_changes_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: td,
+              readOnly: true,
+              onTap: () => _pickGoalDate(c),
+              decoration: InputDecoration(
+                labelText: 'Target date',
+                hintText: 'Choose a date',
+                prefixIcon: const Icon(Icons.calendar_month_outlined),
+                suffixIcon: td.text.isEmpty
+                    ? const Icon(Icons.arrow_drop_down)
+                    : IconButton(
+                        tooltip: 'Clear target date',
+                        onPressed: () => setState(() => td.clear()),
+                        icon: const Icon(Icons.close),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(c).colorScheme.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: Theme.of(c).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_view_week_outlined, color: primaryOf(c)),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Weekly workouts',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Text('Your activity target', style: muted),
+                      ],
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: 'Decrease weekly workouts',
+                    onPressed: (store.goal['wk'] as int) <= 1
+                        ? null
+                        : () {
+                            store.goal['wk'] = max(
+                              1,
+                              (store.goal['wk'] as int) - 1,
+                            );
+                            store.save();
+                          },
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      '${store.goal['wk']}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: 'Increase weekly workouts',
+                    onPressed: (store.goal['wk'] as int) >= 7
+                        ? null
+                        : () {
+                            store.goal['wk'] = min(
+                              7,
+                              (store.goal['wk'] as int) + 1,
+                            );
+                            store.save();
+                          },
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            btn('Save goals', () => _saveGoals(c)),
           ],
         ),
       ),
     ]);
   });
+
+  void _saveWeight(BuildContext context) {
+    final entered = double.tryParse(weightInput.text.trim());
+    if (entered == null || entered <= 0 || entered > 1000) {
+      snack(
+        context,
+        'Enter a valid weight greater than 0 and no more than 1000.',
+      );
+      return;
+    }
+    final weight = _weightInKg(entered);
+    final weights = store.d['weights'] as List;
+    if (weights.isEmpty && (store.goal['sw'] as num) == 0) {
+      store.goal['sw'] = weight;
+    }
+    weights.removeWhere((entry) => entry[0] == today());
+    weights.add([today(), weight]);
+    store.save();
+    snack(context, "Today's weight saved.");
+  }
+
+  Future<void> _pickGoalDate(BuildContext context) async {
+    final now = DateTime.now();
+    final existing = DateTime.tryParse(td.text);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: existing != null && !existing.isBefore(now) ? existing : now,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 20),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => td.text = isoOf(picked));
+  }
+
+  void _saveGoals(BuildContext context) {
+    final targetText = tw.text.trim();
+    final target = targetText.isEmpty ? null : double.tryParse(targetText);
+    if (targetText.isNotEmpty &&
+        (target == null || target <= 0 || target > 1000)) {
+      snack(
+        context,
+        'Enter a valid target weight greater than 0 and no more than 1000.',
+      );
+      return;
+    }
+    store.goal['w'] = target == null ? 0.0 : _weightInKg(target);
+    store.goal['d'] = td.text;
+    store.save();
+    snack(context, 'Goals saved.');
+  }
 }
