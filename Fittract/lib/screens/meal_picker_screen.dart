@@ -156,6 +156,16 @@ const _mealOptions = [
     21,
     Icons.ramen_dining_outlined,
   ),
+  _MealOption(
+    'Shomai With Rice',
+    'Lunch',
+    'Shomai with rice and vegetables in a light sauce.',
+    250,
+    4,
+    30,
+    1,
+    Icons.rice_bowl_outlined,
+  ),
 ];
 
 const _mealTypes = ['All', 'Breakfast', 'Lunch', 'Snack', 'Dinner'];
