@@ -334,7 +334,7 @@ class _MealPickerScreenState extends State<MealPickerScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 6),
               Text(meal.description, style: muted),
               const SizedBox(height: 8),
               Wrap(

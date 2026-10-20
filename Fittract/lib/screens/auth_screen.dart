@@ -137,27 +137,32 @@ class _AuthState extends State<AuthScreen> {
             reg ? 'Create your account' : 'Welcome back',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
+          const SizedBox(height: 8),
           if (reg)
             TextField(
               controller: nm,
               decoration: const InputDecoration(labelText: 'Full name'),
             ),
+          if (reg) const SizedBox(height: 12),
           TextField(
             controller: em,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(labelText: 'Email address'),
           ),
+          const SizedBox(height: 12),
           TextField(
             controller: pw,
             obscureText: true,
             decoration: const InputDecoration(labelText: 'Password'),
           ),
+          if (reg) const SizedBox(height: 12),
           if (reg)
             TextField(
               controller: pw2,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Confirm password'),
             ),
+          if (reg) const SizedBox(height: 8),
           if (reg)
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,

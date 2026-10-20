@@ -228,6 +228,7 @@ class _EditState extends State<EditRoutine> {
                 ],
               ),
               Text(exs[i]['m'], style: muted),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   num2('Sets', exs[i], 's'),

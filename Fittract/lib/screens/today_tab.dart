@@ -29,13 +29,14 @@ class TodayTab extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(ic, color: primaryOf(context), size: 18),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
               big,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(height: 2),
             Text(
               sub,
               style: muted,

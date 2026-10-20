@@ -4,9 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fittract/main.dart';
 import 'package:fittract/screens/food_screen.dart';
 import 'package:fittract/screens/profile_tab.dart';
+import 'package:fittract/screens/today_tab.dart';
 import 'package:fittract/screens/weight_screen.dart';
 import 'package:fittract/store/store.dart';
 import 'package:fittract/widgets/shared_widgets.dart';
+
+void _ignoreTab(int _) {}
 
 void main() {
   test('New account data starts empty', () {
@@ -155,6 +158,59 @@ void main() {
 
     expect(store.lastW(), 70.5);
     expect(store.d['weights'].single[0], today());
+  });
+
+  testWidgets('Profile camera icon can be pressed without opening anything', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await store.init();
+
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: ProfileTab())),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.camera_alt_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
+  });
+
+  testWidgets('Today notifications show enabled workout and meal reminders', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await store.init();
+    store.d['wr'] = true;
+    store.d['mr'] = true;
+    store.d['routines'] = [
+      {
+        'id': 1,
+        'name': 'Morning workout',
+        'type': 'Strength',
+        'ex': <Map<String, dynamic>>[],
+      },
+    ];
+    store.d['sch'] = [
+      {'id': 1, 'r': 1, 'd': today(), 't': '08:00'},
+    ];
+    store.save();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: TodayTab(goTo: _ignoreTab)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.notifications_none));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Workout reminder'), findsOneWidget);
+    expect(find.text('Meal reminder'), findsOneWidget);
+    expect(find.text('Morning workout at 08:00'), findsOneWidget);
   });
 
   testWidgets('Weight tracker logs weight and saves redesigned goals', (

@@ -294,6 +294,53 @@ Future<Map<String, String>?> form(
   String ok = 'Save',
 }) async {
   final ctl = {for (final f in fs) f.k: TextEditingController(text: f.v)};
+  Widget buildField(BuildContext dc, F f) => f.type == 'choice'
+      ? StatefulBuilder(
+          builder: (ctx, ss) => DropdownButtonFormField<String>(
+            initialValue: ctl[f.k]!.text,
+            decoration: InputDecoration(labelText: f.label),
+            items: [
+              for (final o in f.opts)
+                DropdownMenuItem(value: o, child: Text(o)),
+            ],
+            onChanged: (v) {
+              if (v != null) ss(() => ctl[f.k]!.text = v);
+            },
+          ),
+        )
+      : TextField(
+          controller: ctl[f.k],
+          readOnly: f.type == 'date' || f.type == 'time',
+          obscureText: f.type == 'pass',
+          keyboardType: f.type == 'number'
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : null,
+          decoration: InputDecoration(labelText: f.label),
+          onTap: () async {
+            if (f.type == 'date') {
+              final p = await showDatePicker(
+                context: dc,
+                initialDate:
+                    DateTime.tryParse(ctl[f.k]!.text) ?? DateTime.now(),
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (p != null) ctl[f.k]!.text = isoOf(p);
+            } else if (f.type == 'time') {
+              final parts = ctl[f.k]!.text.split(':');
+              final hour = parts.isNotEmpty ? int.tryParse(parts[0]) : null;
+              final minute = parts.length > 1 ? int.tryParse(parts[1]) : null;
+              final p = await showTimePicker(
+                context: dc,
+                initialTime: TimeOfDay(hour: hour ?? 18, minute: minute ?? 0),
+              );
+              if (p != null) {
+                ctl[f.k]!.text =
+                    '${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}';
+              }
+            }
+          },
+        );
   try {
     return await showDialog<Map<String, String>>(
       context: c,
@@ -303,64 +350,10 @@ Future<Map<String, String>?> form(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final f in fs)
-                f.type == 'choice'
-                    ? StatefulBuilder(
-                        builder: (ctx, ss) => DropdownButtonFormField<String>(
-                          initialValue: ctl[f.k]!.text,
-                          decoration: InputDecoration(labelText: f.label),
-                          items: [
-                            for (final o in f.opts)
-                              DropdownMenuItem(value: o, child: Text(o)),
-                          ],
-                          onChanged: (v) {
-                            if (v != null) ss(() => ctl[f.k]!.text = v);
-                          },
-                        ),
-                      )
-                    : TextField(
-                        controller: ctl[f.k],
-                        readOnly: f.type == 'date' || f.type == 'time',
-                        obscureText: f.type == 'pass',
-                        keyboardType: f.type == 'number'
-                            ? const TextInputType.numberWithOptions(
-                                decimal: true,
-                              )
-                            : null,
-                        decoration: InputDecoration(labelText: f.label),
-                        onTap: () async {
-                          if (f.type == 'date') {
-                            final p = await showDatePicker(
-                              context: dc,
-                              initialDate:
-                                  DateTime.tryParse(ctl[f.k]!.text) ??
-                                  DateTime.now(),
-                              firstDate: DateTime(2000),
-                              lastDate: DateTime(2100),
-                            );
-                            if (p != null) ctl[f.k]!.text = isoOf(p);
-                          } else if (f.type == 'time') {
-                            final parts = ctl[f.k]!.text.split(':');
-                            final hour = parts.isNotEmpty
-                                ? int.tryParse(parts[0])
-                                : null;
-                            final minute = parts.length > 1
-                                ? int.tryParse(parts[1])
-                                : null;
-                            final p = await showTimePicker(
-                              context: dc,
-                              initialTime: TimeOfDay(
-                                hour: hour ?? 18,
-                                minute: minute ?? 0,
-                              ),
-                            );
-                            if (p != null) {
-                              ctl[f.k]!.text =
-                                  '${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}';
-                            }
-                          }
-                        },
-                      ),
+              for (var i = 0; i < fs.length; i++) ...[
+                if (i > 0) const SizedBox(height: 12),
+                buildField(dc, fs[i]),
+              ],
             ],
           ),
         ),
@@ -398,32 +391,34 @@ void showNotes(BuildContext c) {
     backgroundColor: Theme.of(c).colorScheme.surface,
     builder: (_) => Padding(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Notifications',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          if (l.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: Text('All caught up 🎉'),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Notifications',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
-          for (final n in l)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Text(n[0], style: const TextStyle(fontSize: 24)),
-              title: Text(
-                n[1],
-                style: const TextStyle(fontWeight: FontWeight.w700),
+            const SizedBox(height: 8),
+            if (l.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text('All caught up 🎉'),
               ),
-              subtitle: Text(n[2]),
-            ),
-          btn('Close', () => Navigator.pop(c)),
-        ],
+            for (final n in l)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Text(n[0], style: const TextStyle(fontSize: 24)),
+                title: Text(
+                  n[1],
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(n[2]),
+              ),
+            btn('Close', () => Navigator.pop(c)),
+          ],
+        ),
       ),
     ),
   );

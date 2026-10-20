@@ -62,15 +62,18 @@ class _WorkoutState extends State<WorkoutScreen> {
             tag('EXERCISE ${i + 1} OF ${exs.length}'),
             const SizedBox(height: 6),
             Text(exs[i]['n'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
             Text('${exs[i]['s']} sets × ${exs[i]['r']} · ${exs[i]['rest']} sec rest', style: muted),
             const SizedBox(height: 8),
-            for (int j = 0; j < sets[i].length; j++)
+            for (int j = 0; j < sets[i].length; j++) ...[
+              if (j > 0) const SizedBox(height: 6),
               Row(children: [
                 SizedBox(width: 24, child: Text('${j + 1}', style: const TextStyle(fontWeight: FontWeight.w700))),
                 Expanded(child: Padding(padding: const EdgeInsets.all(4), child: TextFormField(key: ValueKey('kg$i$j'), initialValue: '${sets[i][j]['kg']}', keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'kg', isDense: true), onChanged: (v) => sets[i][j]['kg'] = num_(v)))),
                 Expanded(child: Padding(padding: const EdgeInsets.all(4), child: TextFormField(key: ValueKey('rp$i$j'), initialValue: '${sets[i][j]['rp']}', keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'reps', isDense: true), onChanged: (v) => sets[i][j]['rp'] = num_(v).toInt()))),
                 Checkbox(value: sets[i][j]['ok'], activeColor: kPri, onChanged: (v) => setState(() => sets[i][j]['ok'] = v!)),
               ]),
+            ],
             const SizedBox(height: 8),
             btn('✓ Mark exercise complete', () => setState(() {
                   done[i] = true;

@@ -311,7 +311,7 @@ class Store extends ChangeNotifier {
   double lastW() {
     final w = (d['weights'] as List).toList()
       ..sort((a, b) => (a[0] as String).compareTo(b[0] as String));
-    return (w.last[1] as num).toDouble();
+    return w.isEmpty ? 0 : (w.last[1] as num).toDouble();
   }
 
   int streak() {

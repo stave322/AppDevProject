@@ -484,10 +484,12 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
       );
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
     final date = await showDatePicker(
       context: context,
-      initialDate: _date,
-      firstDate: DateTime(2000),
+      initialDate: _date.isBefore(todayDate) ? todayDate : _date,
+      firstDate: todayDate,
       lastDate: DateTime(2100),
     );
     if (date != null && mounted) setState(() => _date = date);
@@ -499,6 +501,12 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
   }
 
   void _save() {
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    if (_date.isBefore(todayDate)) {
+      snack(context, 'Choose today or a future date for your workout.');
+      return;
+    }
     Navigator.pop(context, {
       'r': _routineId,
       'd': isoOf(_date),

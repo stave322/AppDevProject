@@ -280,13 +280,13 @@ class Store extends ChangeNotifier {
 
   List<List<String>> notes() {
     final l = <List<String>>[];
-    final t = sch.where((s) => s['d'] == today()).toList();
-    if (t.isNotEmpty && on('wr')) {
-      l.add([
-        '🏋',
-        'Workout today',
-        '${routine(t.first['r'])?['name'] ?? 'Workout'} at ${t.first['t']}',
-      ]);
+    final workoutsToday = sch.where((s) => s['d'] == today()).toList()
+      ..sort((a, b) => (a['t'] as String).compareTo(b['t'] as String));
+    if (on('wr')) {
+      for (final workout in workoutsToday) {
+        final name = routine(workout['r'])?['name'] ?? 'Workout';
+        l.add(['🏋', 'Workout reminder', '$name at ${workout['t']}']);
+      }
     }
     if (on('wtr') && water() < 2500) {
       l.add([
@@ -296,11 +296,7 @@ class Store extends ChangeNotifier {
       ]);
     }
     if (on('mr') && meals.length < 3) {
-      l.add([
-        '🍴',
-        'Log your meals',
-        '${meals.length} of 3 meals logged today',
-      ]);
+      l.add(['🍴', 'Meal reminder', '${meals.length} of 3 meals logged today']);
     }
     if (steps < 8000) {
       l.add(['👣', 'Keep moving', '${8000 - steps} steps to your goal']);

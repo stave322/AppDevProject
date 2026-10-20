@@ -83,20 +83,25 @@ class ProfileTab extends StatelessWidget {
                 ),
                 Transform.translate(
                   offset: const Offset(-24, 25),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: Theme.of(c).colorScheme.surface,
-                      shape: BoxShape.circle,
-                      border: Border.all(
+                  child: Material(
+                    color: Theme.of(c).colorScheme.surface,
+                    shape: CircleBorder(
+                      side: BorderSide(
                         color: Theme.of(c).colorScheme.outlineVariant,
                       ),
                     ),
-                    child: Icon(
-                      Icons.camera_alt_outlined,
-                      size: 15,
-                      color: primaryOf(c),
+                    child: InkResponse(
+                      onTap: () {},
+                      radius: 22,
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: Icon(
+                          Icons.camera_alt_outlined,
+                          size: 15,
+                          color: primaryOf(c),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -152,12 +157,6 @@ class ProfileTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            TextButton.icon(
-              onPressed: () =>
-                  snack(c, 'Profile photo editing is coming soon.'),
-              icon: const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Add profile photo'),
-            ),
             btn(
               '✎  Edit personal details',
               () => editPersonalDetails(c),

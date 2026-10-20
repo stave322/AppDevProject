@@ -17,6 +17,7 @@ class _ProgressState extends State<ProgressTab> {
   Widget stat(String big, String sub) => Expanded(
         child: card(color: kDk, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(big, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
           Text(sub, style: const TextStyle(color: Colors.white70, fontSize: 12)),
         ])),
       );
@@ -35,13 +36,16 @@ class _ProgressState extends State<ProgressTab> {
         SizedBox(height: 120, child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           for (final v in bs) Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 6), height: max(8, v / top * 100), decoration: const BoxDecoration(color: kPri, borderRadius: BorderRadius.vertical(top: Radius.circular(6))), alignment: Alignment.topCenter, child: Text('$v', style: const TextStyle(color: Colors.white, fontSize: 11)))),
         ])),
+        const SizedBox(height: 8),
         const Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [Text('W-3', style: muted), Text('W-2', style: muted), Text('W-1', style: muted), Text('Now', style: muted)]),
       ])),
       h3('Workout history'),
       for (final h in hist.take(all ? 99 : 4))
         card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(h['n'], style: const TextStyle(fontWeight: FontWeight.w700)), Text(h['d'], style: muted)]),
+          const SizedBox(height: 4),
           Text('${h['min']} min · ${h['ex']} exercises · ${h['kc']} kcal', style: muted),
+          const SizedBox(height: 6),
           const Text('✓ Completed', style: TextStyle(color: kPri, fontSize: 12)),
         ])),
       btn(all ? 'Show less' : 'View all', () => setState(() => all = !all), tonal: true),
@@ -66,9 +70,9 @@ class _ProgressState extends State<ProgressTab> {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(k == today() ? 'Today' : k, style: const TextStyle(fontWeight: FontWeight.w700)), Text('${m[k]!['min']} min active', style: muted)]),
           const SizedBox(height: 8),
           Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-            Column(children: [Text('${m[k]!['k']}', style: const TextStyle(fontWeight: FontWeight.w800)), const Text('kcal', style: muted)]),
-            Column(children: [Text('${m[k]!['s']}', style: const TextStyle(fontWeight: FontWeight.w800)), const Text('steps', style: muted)]),
-            Column(children: [Text('${((m[k]!['ml'] as int) / 1000).toStringAsFixed(1)} L', style: const TextStyle(fontWeight: FontWeight.w800)), const Text('water', style: muted)]),
+            Column(children: [Text('${m[k]!['k']}', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), const Text('kcal', style: muted)]),
+            Column(children: [Text('${m[k]!['s']}', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), const Text('steps', style: muted)]),
+            Column(children: [Text('${((m[k]!['ml'] as int) / 1000).toStringAsFixed(1)} L', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), const Text('water', style: muted)]),
           ]),
           if ((m[k]!['n'] as String).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(m[k]!['n'], style: muted)),
         ])),

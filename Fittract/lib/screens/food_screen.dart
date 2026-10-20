@@ -222,7 +222,7 @@ class FoodScreen extends StatelessWidget {
                   ),
                 ),
                 if (description.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(description, style: muted),
                 ],
                 const SizedBox(height: 7),
