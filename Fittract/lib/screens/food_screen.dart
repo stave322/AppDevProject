@@ -65,7 +65,7 @@ class FoodScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 18),
+            const SizedBox(width: kGapLg),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,7 +105,7 @@ class FoodScreen extends StatelessWidget {
               (goals['protein'] as num).toInt(),
               Icons.egg_alt_outlined,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapMd),
             _nutrientRow(
               c,
               'Carbs',
@@ -113,7 +113,7 @@ class FoodScreen extends StatelessWidget {
               (goals['carbs'] as num).toInt(),
               Icons.grain,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapMd),
             _nutrientRow(
               c,
               'Fat',
@@ -166,7 +166,7 @@ class FoodScreen extends StatelessWidget {
   ) => Row(
     children: [
       Icon(icon, size: 19, color: primaryOf(context)),
-      const SizedBox(width: 10),
+      const SizedBox(width: kGapMd),
       Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,7 +225,7 @@ class FoodScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(description, style: muted),
                 ],
-                const SizedBox(height: 7),
+                const SizedBox(height: kGapSm),
                 Wrap(
                   spacing: 6,
                   children: [
@@ -252,7 +252,7 @@ class FoodScreen extends StatelessWidget {
 
   Widget _macroTag(BuildContext context, String label, dynamic value) =>
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: kGapSm, vertical: kGapXs),
         decoration: BoxDecoration(
           color: tintOf(context),
           borderRadius: BorderRadius.circular(99),
@@ -319,7 +319,7 @@ class _NutritionGoalsSheetState extends State<_NutritionGoalsSheet> {
               'Personalize your daily calorie and nutrient targets.',
               style: muted,
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: kGapLg),
             _goalInput(
               _calories,
               'Calories',
@@ -337,13 +337,13 @@ class _NutritionGoalsSheetState extends State<_NutritionGoalsSheet> {
                     Icons.egg_alt_outlined,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: kGapMd),
                 Expanded(child: _goalInput(_carbs, 'Carbs', 'g', Icons.grain)),
               ],
             ),
             const SizedBox(height: 12),
             _goalInput(_fat, 'Fat', 'g', Icons.water_drop_outlined),
-            const SizedBox(height: 18),
+            const SizedBox(height: kGapLg),
             btn('Save nutrition goals', _save),
           ],
         ),

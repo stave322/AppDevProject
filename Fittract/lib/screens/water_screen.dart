@@ -27,9 +27,13 @@ class WaterScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => live((c) {
-    final w = store.water(), g = w ~/ 250;
+    final w = store.water();
+    final waterGoalMl = store.waterGoalMl > 0 ? store.waterGoalMl : 2500;
+    final stepGoal = store.stepGoal > 0 ? store.stepGoal : 8000;
+    final filledCells = ((w * 10) / waterGoalMl).clamp(0, 10).floor();
     final wl = store.d['water'] as List;
-    final last = wl.isEmpty ? null : wl.last;
+    final todays = wl.where((e) => e['d'] == today()).toList();
+    final last = todays.isEmpty ? null : todays.last;
     return screen([
       hdr(c, 'Water & activity · Today', 'Every bit counts.', back: true),
       card(
@@ -58,7 +62,7 @@ class WaterScreen extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'of 2.5 L goal · ${(w / 25).clamp(0, 100).round()}% complete',
+                        'of ${(waterGoalMl / 1000).toStringAsFixed(1)} L goal · ${((w / waterGoalMl) * 100).clamp(0, 100).round()}% complete',
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -86,23 +90,24 @@ class WaterScreen extends StatelessWidget {
                       height: 30,
                       margin: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: i < g ? kMint : Colors.white12,
+                        color: i < filledCells ? kMint : Colors.white12,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
                         Icons.local_drink_outlined,
                         size: 14,
-                        color: i < g ? kDk : Colors.white54,
+                        color: i < filledCells ? kDk : Colors.white54,
                       ),
                     ),
                   ),
               ],
             ),
+            const SizedBox(height: kGapSm),
             Text(
-              '${min(g, 10)} of 10 glasses · 250 ml each',
+              '$filledCells of 10 marks · goal ${(waterGoalMl / 1000).toStringAsFixed(1)} L (${waterGoalMl ~/ 10} ml per mark)',
               style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             Row(
               children: [
                 Expanded(
@@ -115,7 +120,7 @@ class WaterScreen extends StatelessWidget {
                     child: const Text('+ 250 ml'),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: kGapMd),
                 Expanded(
                   child: FilledButton(
                     onPressed: () async {
@@ -150,8 +155,8 @@ class WaterScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              if (wl.isNotEmpty) {
-                wl.removeLast();
+              if (todays.isNotEmpty) {
+                wl.remove(todays.last);
                 store.save();
               }
             },
@@ -168,8 +173,11 @@ class WaterScreen extends StatelessWidget {
               '${store.steps}',
               style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
             ),
-            const Text('of 8,000 daily steps', style: muted),
-            bar(store.steps / 8000),
+            Text(
+              'of ${store.withThousands(stepGoal)} daily steps',
+              style: muted,
+            ),
+            bar(store.steps / stepGoal),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -225,6 +233,28 @@ class WaterScreen extends StatelessWidget {
           ),
         ),
       btn('+ Log physical activity', () => showLogActivity(c)),
+      const SizedBox(height: kGapSm),
+      btn('Edit daily goals', () async {
+        final f = await form(c, 'Daily goals', [
+          F('w', 'Water goal (ml)', '${store.waterGoalMl}', type: 'number'),
+          F('s', 'Step goal', '${store.stepGoal}', type: 'number'),
+        ], ok: 'Save');
+        if (f == null || !c.mounted) return;
+        final water = int.tryParse((f['w'] ?? '').trim());
+        final steps = int.tryParse((f['s'] ?? '').trim());
+        if (water == null || water < 500 || water > 10000) {
+          snack(c, 'Water goal must be between 500 and 10,000 ml.');
+          return;
+        }
+        if (steps == null || steps < 1000 || steps > 50000) {
+          snack(c, 'Step goal must be between 1,000 and 50,000.');
+          return;
+        }
+        store.activityGoals['waterMl'] = water;
+        store.activityGoals['steps'] = steps;
+        store.save();
+        snack(c, 'Daily goals saved.');
+      }, tonal: true),
     ]);
   });
 }

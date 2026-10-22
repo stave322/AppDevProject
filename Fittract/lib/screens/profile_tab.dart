@@ -6,8 +6,58 @@ import '../services/google_auth_service.dart';
 import '../store/store.dart';
 import '../widgets/shared_widgets.dart';
 
+/// User-facing message for a password-change outcome. Verification failures
+/// are reported without touching stored data (the store guarantees this).
+String _passwordChangeMessage(PasswordChangeResult result) => switch (result) {
+  PasswordChangeResult.success => 'Password updated.',
+  PasswordChangeResult.invalidInput =>
+    'New password needs at least 8 characters.',
+  PasswordChangeResult.wrongCurrentPassword =>
+    'Current password is incorrect. Your password was not changed.',
+  PasswordChangeResult.notEmailAccount =>
+    'Password changes are managed by your Google account.',
+  PasswordChangeResult.storageError =>
+    'Could not access saved account data. Please try again.',
+  PasswordChangeResult.serviceError =>
+    'Could not reach the account service. Your password was not changed.',
+};
+
+/// User-facing message for a local-account → Firebase migration attempt.
+String _migrationMessage(CloudMigrationResult result) => switch (result) {
+  CloudMigrationResult.success =>
+    'Backed up. This account now syncs across your devices.',
+  CloudMigrationResult.alreadyLinked =>
+    'This account is already backed up to the cloud.',
+  CloudMigrationResult.invalidPassword =>
+    'Password incorrect — nothing was uploaded.',
+  CloudMigrationResult.declined => 'Backup cancelled. Nothing left this device.',
+  CloudMigrationResult.unavailable =>
+    'Cloud backup is unavailable right now. Nothing was uploaded.',
+  CloudMigrationResult.failed =>
+    'Cloud backup failed. Your data is untouched on this device.',
+};
+
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
+
+  /// Uploads an existing local email account to Firebase. The password is
+  /// verified against the on-device PBKDF2 hash *before* the confirmation
+  /// dialog is shown, and a wrong password ends the flow without reading
+  /// anything for upload or touching the cloud.
+  Future<void> _backUpToCloud(BuildContext context) async {
+    final fields = await form(context, 'Back up to cloud', [
+      F('pw', 'Your account password', '', type: 'pass'),
+    ], ok: 'Continue');
+    if (fields == null || !context.mounted) return;
+    final result = await store.migrateLocalAccountToCloud(
+      password: fields['pw'] ?? '',
+      requestConfirmation: (message) async => context.mounted
+          ? await confirm(context, message, 'Back up')
+          : false,
+    );
+    if (!context.mounted) return;
+    snack(context, _migrationMessage(result));
+  }
 
   Future<void> editPersonalDetails(BuildContext context) async {
     final details = await showModalBottomSheet<Map<String, dynamic>>(
@@ -65,47 +115,60 @@ class ProfileTab extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 36,
-                  backgroundColor: tintOf(c),
-                  child: CircleAvatar(
-                    radius: 31,
-                    backgroundColor: primaryOf(c),
-                    child: Text(
-                      name.isEmpty ? '?' : name[0].toUpperCase(),
-                      style: TextStyle(
-                        color: isDark(c) ? kInk : Colors.white,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-                Transform.translate(
-                  offset: const Offset(-24, 25),
-                  child: Material(
-                    color: Theme.of(c).colorScheme.surface,
-                    shape: CircleBorder(
-                      side: BorderSide(
-                        color: Theme.of(c).colorScheme.outlineVariant,
-                      ),
-                    ),
-                    child: InkResponse(
-                      onTap: () {},
-                      radius: 22,
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: Icon(
-                          Icons.camera_alt_outlined,
-                          size: 15,
-                          color: primaryOf(c),
+                SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: CircleAvatar(
+                          radius: 36,
+                          backgroundColor: tintOf(c),
+                          child: CircleAvatar(
+                            radius: 31,
+                            backgroundColor: primaryOf(c),
+                            child: Text(
+                              name.isEmpty ? '?' : name[0].toUpperCase(),
+                              style: TextStyle(
+                                color: isDark(c) ? kInk : Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      Positioned(
+                        right: 0,
+                        bottom: 4,
+                        child: Material(
+                          color: Theme.of(c).colorScheme.surface,
+                          shape: CircleBorder(
+                            side: BorderSide(
+                              color: Theme.of(c).colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: InkResponse(
+                            onTap: () {},
+                            radius: 22,
+                            child: SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: Icon(
+                                Icons.camera_alt_outlined,
+                                size: 15,
+                                color: primaryOf(c),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: kGapLg),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -121,7 +184,7 @@ class ProfileTab extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapLg),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -156,7 +219,13 @@ class ProfileTab extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapLg),
+            TextButton.icon(
+              onPressed: () =>
+                  snack(c, 'Profile photo editing is coming soon.'),
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: const Text('Add profile photo'),
+            ),
             btn(
               '✎  Edit personal details',
               () => editPersonalDetails(c),
@@ -169,9 +238,24 @@ class ProfileTab extends StatelessWidget {
       card(
         child: Column(
           children: [
-            sw(c, 'wr', 'Workout reminders', 'Never miss a scheduled session'),
-            sw(c, 'wtr', 'Water reminders', 'Every 2 hours'),
-            sw(c, 'mr', 'Meal reminders', 'Breakfast, lunch & dinner'),
+            sw(
+              c,
+              'wr',
+              'Workout reminders (in-app)',
+              'Show a card on the Today screen. System notifications are not available yet.',
+            ),
+            sw(
+              c,
+              'wtr',
+              'Water reminders (in-app)',
+              'Show a hydration card while your daily goal is unmet.',
+            ),
+            sw(
+              c,
+              'mr',
+              'Meal reminders (in-app)',
+              'Show a meal logging card until 3 meals are logged.',
+            ),
           ],
         ),
       ),
@@ -199,29 +283,68 @@ class ProfileTab extends StatelessWidget {
               title: const Text('Privacy & account'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
+                if (!store.isEmailAccount) {
+                  snack(
+                    c,
+                    'Password changes are managed by your Google account.',
+                  );
+                  return;
+                }
                 final f = await form(c, 'Change password', [
+                  F('cur', 'Current password', '', type: 'pass'),
                   F('p', 'New password', '', type: 'pass'),
                 ], ok: 'Update');
                 if (f == null || !c.mounted) return;
-                if (f['p']!.length >= 8) {
-                  store.d['pw'] = f['p'];
-                  store.save();
-                  snack(c, 'Password updated.');
-                } else {
-                  snack(c, 'Use 8+ characters.');
-                }
+                final result = await store.changePassword(
+                  currentPassword: f['cur'] ?? '',
+                  newPassword: f['p'] ?? '',
+                );
+                if (!c.mounted) return;
+                snack(c, _passwordChangeMessage(result));
               },
+            ),
+            if (store.isEmailAccount && !store.isCloudLinked)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Back up to cloud'),
+                subtitle: Text(
+                  'Verify your password to sync this account across devices.',
+                  style: muted,
+                ),
+                trailing: const Icon(Icons.cloud_upload_outlined),
+                onTap: () => _backUpToCloud(c),
+              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Cloud sync'),
+              subtitle: Text(store.syncStatusMessage, style: muted),
+              trailing: store.syncFailed
+                  ? const Icon(Icons.refresh, color: kRed)
+                  : const Icon(Icons.cloud_done_outlined),
+              onTap: !store.syncFailed
+                  ? null
+                  : () async {
+                      final ok = await store.syncNow();
+                      if (!c.mounted) return;
+                      snack(
+                        c,
+                        ok
+                            ? 'Backed up to the cloud.'
+                            : store.syncStatusMessage,
+                      );
+                    },
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Reset all data'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
-                if (await confirm(c, 'Erase all data?', 'Erase')) {
-                  final u = store.d['user'];
-                  store.d = store.seed();
-                  store.d['user'] = u;
-                  store.save();
+                if (await confirm(
+                  c,
+                  'Erase your fitness records? Your profile and goals stay.',
+                  'Erase',
+                )) {
+                  store.resetCurrentAccountData();
                 }
               },
             ),
@@ -229,7 +352,7 @@ class ProfileTab extends StatelessWidget {
         ),
       ),
       btn('Log out', () async {
-        if (store.d['authProvider'] == 'google') {
+        if (!store.isEmailAccount && store.hasActiveSession) {
           try {
             await GoogleAuthService().signOut();
           } on FirebaseAuthException catch (error) {
@@ -245,10 +368,7 @@ class ProfileTab extends StatelessWidget {
             snack(c, googleAuthErrorMessage(error));
           }
         }
-        store.d['user'] = null;
-        store.d.remove('accountId');
-        store.d.remove('authProvider');
-        store.save();
+        await store.signOutAsync();
       }, tonal: true),
     ]);
   });
@@ -312,7 +432,7 @@ class _PersonalDetailsSheetState extends State<_PersonalDetailsSheet> {
             ),
             const SizedBox(height: 4),
             const Text('Make your profile feel like yours.', style: muted),
-            const SizedBox(height: 20),
+            const SizedBox(height: kGapLg),
             TextField(
               controller: _name,
               textCapitalization: TextCapitalization.words,
@@ -321,7 +441,7 @@ class _PersonalDetailsSheetState extends State<_PersonalDetailsSheet> {
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             Row(
               children: [
                 Expanded(
@@ -335,7 +455,7 @@ class _PersonalDetailsSheetState extends State<_PersonalDetailsSheet> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: kGapMd),
                 Expanded(
                   child: TextField(
                     controller: _height,
@@ -349,7 +469,7 @@ class _PersonalDetailsSheetState extends State<_PersonalDetailsSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             TextField(
               controller: _weight,
               keyboardType: const TextInputType.numberWithOptions(
@@ -361,10 +481,10 @@ class _PersonalDetailsSheetState extends State<_PersonalDetailsSheet> {
                 suffixText: widget.isImperial ? 'lb' : 'kg',
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: kGapLg),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(kGapLg),
               decoration: BoxDecoration(
                 color: tintOf(context),
                 borderRadius: BorderRadius.circular(16),
@@ -372,7 +492,7 @@ class _PersonalDetailsSheetState extends State<_PersonalDetailsSheet> {
               child: Row(
                 children: [
                   Icon(Icons.lock_outline, color: primaryOf(context)),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: kGapMd),
                   const Expanded(
                     child: Text(
                       'Your personal details stay on your profile.',
@@ -382,7 +502,7 @@ class _PersonalDetailsSheetState extends State<_PersonalDetailsSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: kGapLg),
             btn('Save changes', _save),
           ],
         ),

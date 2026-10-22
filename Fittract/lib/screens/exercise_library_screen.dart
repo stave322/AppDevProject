@@ -321,7 +321,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.fromLTRB(kGapLg, kGapLg, kGapLg, 0),
               child: hdr(
                 context,
                 'Build your workout',
@@ -337,7 +337,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: kGapLg),
               child: TextField(
                 onChanged: (value) => setState(() => _query = value),
                 decoration: const InputDecoration(
@@ -346,18 +346,18 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             Padding(
-              padding: const EdgeInsets.only(left: 16),
+              padding: const EdgeInsets.symmetric(horizontal: kGapLg),
               child: _filterChips(
                 _levels,
                 _level,
                 (value) => setState(() => _level = value),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: kGapSm),
             Padding(
-              padding: const EdgeInsets.only(left: 16),
+              padding: const EdgeInsets.symmetric(horizontal: kGapLg),
               child: _filterChips(
                 _groups,
                 _group,
@@ -365,7 +365,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              padding: const EdgeInsets.fromLTRB(kGapLg, kGapMd, kGapLg, kGapSm),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text('${exercises.length} exercises', style: muted),
@@ -380,7 +380,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                       ),
                     )
                   : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                      padding: const EdgeInsets.fromLTRB(kGapLg, kGapXs, kGapLg, kGapMd),
                       children: [
                         for (final exercise in exercises)
                           _exerciseCard(exercise),
@@ -392,7 +392,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          padding: const EdgeInsets.fromLTRB(kGapLg, kGapSm, kGapLg, kGapMd),
           child: btn(
             _selected.isEmpty
                 ? 'Choose exercises to continue'
@@ -433,13 +433,13 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
               size: 19,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: kGapMd),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
+                const SizedBox(height: kGapXs),
                 Text(
                   '${exercise['lvl']} · ${exercise['m']} · ${exercise['s']} × ${exercise['r']}',
                   style: muted,
@@ -510,9 +510,9 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
               'Create your exercise',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: kGapXs),
             const Text('Add a move that fits your workout.', style: muted),
-            const SizedBox(height: 18),
+            const SizedBox(height: kGapLg),
             TextField(
               controller: _name,
               textCapitalization: TextCapitalization.sentences,
@@ -522,7 +522,7 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
                 prefixIcon: Icon(Icons.fitness_center),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             Row(
               children: [
                 Expanded(
@@ -541,7 +541,7 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
                     },
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: kGapMd),
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     initialValue: _level,
@@ -560,7 +560,7 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             Row(
               children: [
                 Expanded(
@@ -570,7 +570,7 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
                     icon: Icons.repeat,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: kGapMd),
                 Expanded(
                   child: _numberField(
                     controller: _reps,
@@ -580,16 +580,16 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             _numberField(
               controller: _rest,
               label: 'Rest between sets (seconds)',
               icon: Icons.timer_outlined,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapLg),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(kGapLg),
               decoration: BoxDecoration(
                 color: tintOf(context),
                 borderRadius: BorderRadius.circular(16),
@@ -597,7 +597,7 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
               child: Row(
                 children: [
                   Icon(Icons.bolt, color: primaryOf(context)),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: kGapMd),
                   Expanded(
                     child: Text(
                       '${_sets.text} sets · ${_reps.text} reps/sec · $_level $_group',
@@ -607,7 +607,7 @@ class _CustomExerciseSheetState extends State<_CustomExerciseSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: kGapLg),
             btn('Add custom exercise', _save),
           ],
         ),

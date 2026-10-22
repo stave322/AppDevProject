@@ -1,11 +1,22 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'firebase_options.dart';
 import 'store/store.dart';
 import 'screens/auth_screen.dart';
 import 'screens/shell_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Best-effort: a missing/unsupported Firebase configuration must never
+  // block startup — the app falls back to fully local accounts.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (_) {
+    // Keep going without cloud auth/sync.
+  }
   await store.init();
   runApp(const App());
 }
@@ -66,6 +77,14 @@ ThemeData buildTheme(Brightness brightness) {
   );
 }
 
+/// Built once: [buildTheme] (ColorScheme.fromSeed in particular) is too
+/// expensive to run on every [Store] notify, and the App-level listenable
+/// fires on every save.
+class _AppThemes {
+  static final ThemeData light = buildTheme(Brightness.light);
+  static final ThemeData dark = buildTheme(Brightness.dark);
+}
+
 class App extends StatelessWidget {
   const App({super.key});
   @override
@@ -74,10 +93,10 @@ class App extends StatelessWidget {
     builder: (_, _) => MaterialApp(
       title: 'FITTRACK',
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
+      theme: _AppThemes.light,
+      darkTheme: _AppThemes.dark,
       themeMode: store.on('dark') ? ThemeMode.dark : ThemeMode.light,
-      home: store.d['user'] == null ? const AuthScreen() : const Shell(),
+      home: store.hasActiveSession ? const Shell() : const AuthScreen(),
     ),
   );
 }

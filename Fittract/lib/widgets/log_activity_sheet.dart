@@ -81,7 +81,7 @@ class _LogActivitySheetState extends State<_LogActivitySheet> {
                 'Every bit of movement counts.',
                 style: muted,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: kGapLg),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -109,8 +109,9 @@ class _LogActivitySheetState extends State<_LogActivitySheet> {
                     ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: kGapLg),
               const Text('Duration', style: muted),
+              const SizedBox(height: kGapSm),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -151,7 +152,7 @@ class _LogActivitySheetState extends State<_LogActivitySheet> {
                     ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: kGapMd),
               TextField(
                 controller: _distance,
                 onChanged: (_) => setState(() {}),
@@ -165,9 +166,9 @@ class _LogActivitySheetState extends State<_LogActivitySheet> {
                   helperText: 'Leave blank to estimate from your activity.',
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: kGapLg),
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: kGapLg),
                 decoration: BoxDecoration(
                   color: tintOf(context),
                   borderRadius: BorderRadius.circular(16),
@@ -181,7 +182,7 @@ class _LogActivitySheetState extends State<_LogActivitySheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: kGapLg),
               btn('Save activity', _save),
             ],
           ),

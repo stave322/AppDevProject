@@ -155,7 +155,7 @@ class _ScheduleState extends State<ScheduleTab> {
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: kGapMd),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,15 +164,16 @@ class _ScheduleState extends State<ScheduleTab> {
                   r?['name'] ?? '(deleted routine)',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                Text(
-                  '${t12(s['t'])} · $mins min${store.on('wr') ? ' · Reminder on' : ''}',
-                  style: muted,
-                ),
+                  Text(
+                    '${t12(s['t'])} · $mins min${store.on('wr') ? ' · Today reminder on' : ''}',
+                    style: muted,
+                  ),
               ],
             ),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_horiz),
+            tooltip: 'Workout options',
             onSelected: (v) {
               if (v == 'start' && r != null) go(c, WorkoutScreen(r));
               if (v == 'delete') {
@@ -238,6 +239,7 @@ class _ScheduleState extends State<ScheduleTab> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
+                  tooltip: 'Previous month',
                   onPressed: () =>
                       setState(() => cm = DateTime(cm.year, cm.month - 1)),
                   icon: const Icon(Icons.chevron_left),
@@ -250,6 +252,7 @@ class _ScheduleState extends State<ScheduleTab> {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Next month',
                   onPressed: () =>
                       setState(() => cm = DateTime(cm.year, cm.month + 1)),
                   icon: const Icon(Icons.chevron_right),
@@ -298,16 +301,19 @@ class _ScheduleState extends State<ScheduleTab> {
         child: Row(
           children: [
             Icon(Icons.notifications_none, color: primaryOf(c)),
-            const SizedBox(width: 12),
-            const Expanded(
+            const SizedBox(width: kGapMd),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Workout reminders',
+                  const Text(
+                    'Workout reminders (in-app)',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  Text('15 minutes before', style: muted),
+                  Text(
+                    'Shows a card on Today. No system notifications yet.',
+                    style: muted,
+                  ),
                 ],
               ),
             ),
@@ -370,7 +376,7 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
                 'Choose a routine, date and time.',
                 style: muted,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: kGapLg),
               DropdownButtonFormField<dynamic>(
                 initialValue: _routineId,
                 decoration: const InputDecoration(
@@ -386,7 +392,7 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
                 ],
                 onChanged: (value) => setState(() => _routineId = value),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: kGapMd),
               Row(
                 children: [
                   Expanded(
@@ -398,7 +404,7 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
                       onTap: _pickDate,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: kGapMd),
                   Expanded(
                     child: _pickerTile(
                       icon: Icons.schedule_outlined,
@@ -410,10 +416,10 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
                 ],
               ),
               if (routine != null) ...[
-                const SizedBox(height: 14),
+                const SizedBox(height: kGapLg),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(kGapLg),
                   decoration: BoxDecoration(
                     color: tintOf(context),
                     borderRadius: BorderRadius.circular(16),
@@ -421,7 +427,7 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
                   child: Row(
                     children: [
                       Icon(Icons.bolt, color: primaryOf(context)),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: kGapMd),
                       Expanded(
                         child: Text(
                           '${routine['name']} · ${(routine['ex'] as List).length} exercises',
@@ -432,7 +438,7 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
+              const SizedBox(height: kGapLg),
               btn('Add to schedule', _save),
             ],
           ),
@@ -467,7 +473,7 @@ class _ScheduleWorkoutSheetState extends State<_ScheduleWorkoutSheet> {
                 Row(
                   children: [
                     Icon(icon, size: 18, color: primaryOf(context)),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: kGapSm),
                     Text(label, style: muted),
                   ],
                 ),

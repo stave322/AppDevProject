@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../store/store.dart';
 
+const kGapXs = 4.0;
+const kGapSm = 8.0;
+const kGapMd = 12.0;
+const kGapLg = 16.0;
+const kGapXl = 20.0;
+
 Widget live(Widget Function(BuildContext) f) =>
     ListenableBuilder(listenable: store, builder: (c, _) => f(c));
 
@@ -11,7 +17,7 @@ Widget card({
   VoidCallback? onTap,
   EdgeInsets? pad,
 }) => Padding(
-  padding: const EdgeInsets.only(bottom: 12),
+  padding: const EdgeInsets.only(bottom: kGapMd),
   child: Builder(
     builder: (context) => Material(
       color: color ?? Theme.of(context).colorScheme.surface,
@@ -25,7 +31,7 @@ Widget card({
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Padding(
-          padding: pad ?? const EdgeInsets.all(16),
+          padding: pad ?? const EdgeInsets.all(kGapLg),
           child: SizedBox(width: double.infinity, child: child),
         ),
       ),
@@ -158,13 +164,15 @@ Widget tag(String s) => Builder(
 );
 
 Widget h3(String s, {Widget? trailing}) => Padding(
-  padding: const EdgeInsets.only(top: 10, bottom: 8),
+  padding: const EdgeInsets.only(top: kGapXl, bottom: kGapSm),
   child: Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
-      Text(
-        s,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      Flexible(
+        child: Text(
+          s,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
       ),
       ?trailing,
     ],
@@ -188,6 +196,7 @@ Widget hdr(
               backgroundColor: Theme.of(c).colorScheme.surface,
               child: IconButton(
                 icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back',
                 onPressed: () => Navigator.pop(c),
               ),
             ),
@@ -195,7 +204,7 @@ Widget hdr(
           ...act,
         ],
       ),
-    const SizedBox(height: 6),
+    const SizedBox(height: kGapSm),
     Text(
       k.toUpperCase(),
       style: TextStyle(
@@ -214,17 +223,17 @@ Widget hdr(
         color: Theme.of(c).colorScheme.onSurface,
       ),
     ),
-    const SizedBox(height: 14),
+    const SizedBox(height: kGapLg),
   ],
 );
 
 Widget screen(List<Widget> kids) => Scaffold(
   body: SafeArea(
-    child: ListView(padding: const EdgeInsets.all(16), children: kids),
+    child: ListView(padding: const EdgeInsets.all(kGapLg), children: kids),
   ),
 );
 Widget tabBody(List<Widget> kids) => SafeArea(
-  child: ListView(padding: const EdgeInsets.all(16), children: kids),
+  child: ListView(padding: const EdgeInsets.all(kGapLg), children: kids),
 );
 PageRoute<T> _animatedRoute<T>(Widget page) => PageRouteBuilder<T>(
   pageBuilder: (_, _, _) => page,
@@ -261,18 +270,18 @@ void snack(BuildContext c, String m) =>
 Future<bool> confirm(BuildContext c, String title, String ok) async =>
     await showDialog<bool>(
       context: c,
-      builder: (_) => AlertDialog(
+      builder: (dc) => AlertDialog(
         title: Text(title),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(c, false),
+            onPressed: () => Navigator.pop(dc, false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(c, true),
+            onPressed: () => Navigator.pop(dc, true),
             style: FilledButton.styleFrom(
-              backgroundColor: primaryOf(c),
-              foregroundColor: Theme.of(c).colorScheme.onPrimary,
+              backgroundColor: primaryOf(dc),
+              foregroundColor: Theme.of(dc).colorScheme.onPrimary,
             ),
             child: Text(ok),
           ),
@@ -351,7 +360,7 @@ Future<Map<String, String>?> form(
             mainAxisSize: MainAxisSize.min,
             children: [
               for (var i = 0; i < fs.length; i++) ...[
-                if (i > 0) const SizedBox(height: 12),
+                if (i > 0) const SizedBox(height: kGapMd),
                 buildField(dc, fs[i]),
               ],
             ],
@@ -390,20 +399,24 @@ void showNotes(BuildContext c) {
     context: c,
     backgroundColor: Theme.of(c).colorScheme.surface,
     builder: (_) => Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(kGapXl),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Notifications',
+              "Today's reminders",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: kGapSm),
+            const Text(
+              'In-app only — no system notifications are sent.',
+              style: muted,
+            ),
             if (l.isEmpty)
               const Padding(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.all(kGapMd),
                 child: Text('All caught up 🎉'),
               ),
             for (final n in l)

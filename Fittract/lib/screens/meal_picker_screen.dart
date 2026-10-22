@@ -347,7 +347,7 @@ class _MealPickerScreenState extends State<MealPickerScreen> {
                   _macroChip(context, 'F', meal.fat),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: kGapMd),
               SizedBox(
                 height: 38,
                 child: FilledButton.tonalIcon(
@@ -369,7 +369,7 @@ class _MealPickerScreenState extends State<MealPickerScreen> {
   );
 
   Widget _macroChip(BuildContext context, String label, int value) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: kGapSm, vertical: kGapXs),
     decoration: BoxDecoration(
       color: tintOf(context),
       borderRadius: BorderRadius.circular(99),
@@ -419,7 +419,7 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
       child: const Row(
         children: [
           Icon(Icons.edit_note_outlined, color: kPri, size: 28),
-          SizedBox(width: 10),
+          SizedBox(width: kGapMd),
           Expanded(
             child: Text(
               'Enter what you ate and its nutrition. It will be added to today’s food log.',
@@ -483,13 +483,13 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
         Expanded(
           child: _macroInput(_protein, 'Protein', Icons.egg_alt_outlined),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: kGapMd),
         Expanded(child: _macroInput(_carbs, 'Carbs', Icons.grain)),
-        const SizedBox(width: 8),
+        const SizedBox(width: kGapMd),
         Expanded(child: _macroInput(_fat, 'Fat', Icons.water_drop_outlined)),
       ],
     ),
-    const SizedBox(height: 18),
+    const SizedBox(height: kGapLg),
     btn('Add to food log', _save),
   ]);
 
@@ -542,8 +542,8 @@ class _ManualMealScreenState extends State<ManualMealScreen> {
       'f': fat.round(),
     });
     store.save();
-    Navigator.pop(context);
     snack(context, '$name added to today.');
+    Navigator.pop(context);
   }
 
   double? _parseAmount(String value) {

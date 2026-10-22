@@ -23,18 +23,28 @@ class _ProgressState extends State<ProgressTab> {
       );
 
   List<Widget> overview(BuildContext c) {
-    final recent = store.hist.where((h) => (h['d'] as String).compareTo(daysAgo(27)) >= 0).toList();
-    final mins = recent.fold<int>(0, (a, h) => a + (h['min'] as int));
+    // Dates are stringified rather than cast: retention keeps entries whose
+    // date is missing, and they must not crash this screen.
+    final recent = store.hist.where((h) => '${h['d']}'.compareTo(daysAgo(27)) >= 0).toList();
+    final mins = recent.fold<int>(0, (a, h) => a + (h['min'] is num ? (h['min'] as num).toInt() : 0));
     final bs = [3, 2, 1, 0].map(store.wkCount).toList();
     final top = max(4, bs.reduce(max));
-    final hist = store.hist.toList()..sort((a, b) => (b['d'] as String).compareTo(a['d'] as String));
+    final hist = store.hist.toList()..sort((a, b) => '${b['d']}'.compareTo('${a['d']}'));
     return [
-      Row(children: [stat('${recent.length}', 'Workouts · last 4 weeks'), const SizedBox(width: 10), stat('${mins ~/ 60}h ${mins % 60}m', 'Time moving')]),
+      Row(children: [stat('${recent.length}', 'Workouts · last 4 weeks'), const SizedBox(width: kGapMd), stat('${mins ~/ 60}h ${mins % 60}m', 'Time moving')]),
       card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [const Text('A stronger routine', style: TextStyle(fontWeight: FontWeight.w700)), const SizedBox(width: 8), tag('4 WEEKS')]),
-        const SizedBox(height: 12),
+        Wrap(spacing: kGapSm, runSpacing: kGapSm, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          const Text('A stronger routine', style: TextStyle(fontWeight: FontWeight.w700)),
+          tag('4 WEEKS'),
+        ]),
+        const SizedBox(height: kGapMd),
         SizedBox(height: 120, child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          for (final v in bs) Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 6), height: max(8, v / top * 100), decoration: const BoxDecoration(color: kPri, borderRadius: BorderRadius.vertical(top: Radius.circular(6))), alignment: Alignment.topCenter, child: Text('$v', style: const TextStyle(color: Colors.white, fontSize: 11)))),
+          for (final v in bs)
+            Expanded(child: Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.end, children: [
+              Text('$v', style: TextStyle(color: primaryOf(c), fontSize: 11, fontWeight: FontWeight.w700)),
+              const SizedBox(height: kGapXs),
+              Container(margin: const EdgeInsets.symmetric(horizontal: 6), height: max(8, v / top * 100), decoration: const BoxDecoration(color: kPri, borderRadius: BorderRadius.vertical(top: Radius.circular(6)))),
+            ])),
         ])),
         const SizedBox(height: 8),
         const Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [Text('W-3', style: muted), Text('W-2', style: muted), Text('W-1', style: muted), Text('Now', style: muted)]),
@@ -42,8 +52,11 @@ class _ProgressState extends State<ProgressTab> {
       h3('Workout history'),
       for (final h in hist.take(all ? 99 : 4))
         card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(h['n'], style: const TextStyle(fontWeight: FontWeight.w700)), Text(h['d'], style: muted)]),
-          const SizedBox(height: 4),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Flexible(child: Text('${h['n']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+            Text('${h['d']}', style: muted),
+          ]),
+          const SizedBox(height: kGapXs),
           Text('${h['min']} min · ${h['ex']} exercises · ${h['kc']} kcal', style: muted),
           const SizedBox(height: 6),
           const Text('✓ Completed', style: TextStyle(color: kPri, fontSize: 12)),
@@ -54,27 +67,37 @@ class _ProgressState extends State<ProgressTab> {
 
   List<Widget> daily() {
     final m = <String, Map<String, dynamic>>{};
-    for (final e in store.d['log'] as List) {
-      m[e['d']] = {'k': (e['meals'] as List).fold<int>(0, (a, x) => a + (x['k'] as int)), 's': e['steps'], 'min': (e['act'] as List).fold<int>(0, (a, x) => a + (x['min'] as int)), 'ml': 0, 'n': (e['meals'] as List).map((x) => x['n']).join(', ')};
+    // Numeric fields are decoded through num so legacy snapshots that stored
+    // values as doubles do not throw a cast error here; collection keys are
+    // read defensively so a missing key falls back to empty.
+    int numOf(Object? v) => v is num ? v.toInt() : 0;
+    List listOf(Object? v) => v is List ? v : const [];
+    for (final e in listOf(store.d['log'])) {
+      final meals = listOf(e['meals']);
+      m['${e['d']}'] = {'k': meals.fold<int>(0, (a, x) => a + numOf(x['k'])), 's': numOf(e['steps']), 'min': listOf(e['act']).fold<int>(0, (a, x) => a + numOf(x['min'])), 'ml': 0, 'n': meals.map((x) => x['n']).join(', ')};
     }
     m[store.d['day']] = {'k': store.kcal(), 's': store.steps, 'min': store.actMin(), 'ml': 0, 'n': store.meals.map((x) => x['n']).join(', ')};
-    for (final w in store.d['water'] as List) {
-      m.putIfAbsent(w['d'], () => {'k': 0, 's': 0, 'min': 0, 'ml': 0, 'n': ''});
-      m[w['d']]!['ml'] = (m[w['d']]!['ml'] as int) + (w['ml'] as num).toInt();
+    for (final w in listOf(store.d['water'])) {
+      final key = '${w['d']}';
+      m.putIfAbsent(key, () => {'k': 0, 's': 0, 'min': 0, 'ml': 0, 'n': ''});
+      m[key]!['ml'] = numOf(m[key]!['ml']) + numOf(w['ml']);
     }
     final keys = m.keys.toList()..sort((a, b) => b.compareTo(a));
     return [
-      const Padding(padding: EdgeInsets.only(bottom: 10), child: Text('Food, steps and activity reset every day. Past days are kept here.', style: muted)),
+      const Padding(padding: EdgeInsets.only(bottom: kGapMd), child: Text('Food, steps and activity reset every day. Past days are kept here.', style: muted)),
       for (final k in keys)
         card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(k == today() ? 'Today' : k, style: const TextStyle(fontWeight: FontWeight.w700)), Text('${m[k]!['min']} min active', style: muted)]),
-          const SizedBox(height: 8),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-            Column(children: [Text('${m[k]!['k']}', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), const Text('kcal', style: muted)]),
-            Column(children: [Text('${m[k]!['s']}', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), const Text('steps', style: muted)]),
-            Column(children: [Text('${((m[k]!['ml'] as int) / 1000).toStringAsFixed(1)} L', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), const Text('water', style: muted)]),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Flexible(child: Text(k == today() ? 'Today' : k, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+            Text('${m[k]!['min']} min active', style: muted),
           ]),
-          if ((m[k]!['n'] as String).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(m[k]!['n'], style: muted)),
+          const SizedBox(height: kGapSm),
+          Row(children: [
+            Expanded(child: Column(children: [Text('${m[k]!['k']}', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('kcal', style: muted)])),
+            Expanded(child: Column(children: [Text('${m[k]!['s']}', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('steps', style: muted)])),
+            Expanded(child: Column(children: [Text('${((m[k]!['ml'] as int) / 1000).toStringAsFixed(1)} L', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('water', style: muted)])),
+          ]),
+          if ((m[k]!['n'] as String).isNotEmpty) Padding(padding: const EdgeInsets.only(top: kGapSm), child: Text(m[k]!['n'], style: muted)),
         ])),
     ];
   }

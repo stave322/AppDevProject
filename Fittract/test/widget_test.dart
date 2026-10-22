@@ -28,6 +28,60 @@ void main() {
     expect(freshStore.d['h'], isNull);
   });
 
+  test('Workout reminders cover every workout today, in time order', () {
+    final s = Store()..d = Store().seed();
+    s.d['routines'] = [
+      {'id': 1, 'name': 'Push day', 'ex': <dynamic>[]},
+    ];
+    s.d['sch'] = [
+      // Deliberately out of order: the reminder list must sort by time.
+      {'id': 1, 'r': 1, 'd': today(), 't': '18:00'},
+      {'id': 2, 'r': 1, 'd': today(), 't': '07:30'},
+      {'id': 3, 'r': 1, 'd': daysAgo(1), 't': '09:00'}, // yesterday
+      {'id': 4, 'r': 1, 'd': daysAgo(-1), 't': '09:00'}, // tomorrow
+    ];
+
+    final workoutNotes = s.notes().where((n) => n[0] == '🏋').toList();
+    expect(workoutNotes, hasLength(2));
+    expect(workoutNotes[0][1], 'Workout at 07:30');
+    expect(workoutNotes[0][2], 'Push day');
+    expect(workoutNotes[1][1], 'Workout at 18:00');
+    expect(workoutNotes[1][2], 'Push day');
+
+    // Deleting a schedule entry removes its reminder immediately.
+    s.sch.removeWhere((e) => e['id'] == 2);
+    final afterDelete = s.notes().where((n) => n[0] == '🏋').toList();
+    expect(afterDelete, hasLength(1));
+    expect(afterDelete.single[1], 'Workout at 18:00');
+
+    // The workout-reminder toggle hides them.
+    s.d['wr'] = false;
+    expect(s.notes().where((n) => n[0] == '🏋'), isEmpty);
+    s.d['wr'] = true;
+
+    // A deleted routine falls back to a generic name instead of crashing.
+    s.d['routines'] = <Map<String, dynamic>>[];
+    final fallback = s.notes().where((n) => n[0] == '🏋').toList();
+    expect(fallback.single[2], 'Workout');
+  });
+
+  test('next() returns the earliest upcoming workout', () {
+    final s = Store()..d = Store().seed();
+    s.d['sch'] = [
+      {'id': 1, 'r': 1, 'd': daysAgo(-2), 't': '18:00'}, // two days ahead
+      {'id': 2, 'r': 1, 'd': today(), 't': '18:00'},
+      {'id': 3, 'r': 1, 'd': today(), 't': '07:30'},
+    ];
+    expect(s.next()?['t'], '07:30');
+    expect(s.next()?['d'], today());
+
+    s.sch.removeWhere((e) => e['d'] == today());
+    expect(s.next()?['d'], daysAgo(-2));
+
+    s.d['sch'] = <Map<String, dynamic>>[];
+    expect(s.next(), isNull);
+  });
+
   test('Google accounts keep separate local fitness data', () async {
     SharedPreferences.setMockInitialValues({});
     final accountStore = Store();
@@ -208,9 +262,15 @@ void main() {
     await tester.tap(find.byIcon(Icons.notifications_none));
     await tester.pumpAndSettle();
 
-    expect(find.text('Workout reminder'), findsOneWidget);
+    expect(find.text('Workout at 08:00'), findsOneWidget);
     expect(find.text('Meal reminder'), findsOneWidget);
-    expect(find.text('Morning workout at 08:00'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Morning workout'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Weight tracker logs weight and saves redesigned goals', (
@@ -238,6 +298,9 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.enterText(find.byType(TextField).first, '68.4');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save weight'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Save weight'));
     await tester.pumpAndSettle();
     expect(store.lastW(), 68.4);
@@ -248,6 +311,9 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.enterText(find.byType(TextField).at(1), '72');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save goals'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Save goals'));
     await tester.pumpAndSettle();
     expect(store.goal['w'], 72.0);
@@ -295,6 +361,7 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('＋  Add food manually'));
     await tester.pumpAndSettle();
     expect(find.text('Meal details'), findsOneWidget);
@@ -313,6 +380,7 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Add to food log'));
     await tester.pumpAndSettle();
 

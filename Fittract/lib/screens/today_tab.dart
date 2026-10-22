@@ -57,6 +57,8 @@ class TodayTab extends StatelessWidget {
     final n = store.notes().length;
     final calorieGoal = (store.nutritionGoals['calories'] as num).toInt();
     final name = (store.d['name'] as String?)?.trim() ?? '';
+    final waterGoalMl = store.waterGoalMl;
+    final stepGoal = store.stepGoal;
     return tabBody([
       hdr(
         c,
@@ -64,6 +66,7 @@ class TodayTab extends StatelessWidget {
         "Let's go, ${name.isEmpty ? 'there' : name.split(' ').first}.",
         act: [
           IconButton(
+            tooltip: "Today's reminders",
             onPressed: () => showNotes(c),
             icon: Badge(
               isLabelVisible: n > 0,
@@ -98,10 +101,10 @@ class TodayTab extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              Text(
-                '${nx['t']} · ${(r['ex'] as List).length} exercises${store.on('wr') ? ' · Reminder on' : ''}',
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
+                Text(
+                  '${nx['t']} · ${(r['ex'] as List).length} exercises${store.on('wr') ? ' · Today reminder on' : ''}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
               const SizedBox(height: 12),
               btn('▷  Start workout', () => go(c, WorkoutScreen(r))),
             ],
@@ -112,7 +115,7 @@ class TodayTab extends StatelessWidget {
           child: Column(
             children: [
               const Text('Nothing scheduled'),
-              const SizedBox(height: 10),
+              const SizedBox(height: kGapMd),
               btn('Schedule a workout', () => goTo(2)),
             ],
           ),
@@ -128,13 +131,13 @@ class TodayTab extends StatelessWidget {
             store.kcal() / calorieGoal,
             () => go(c, const FoodScreen()),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: kGapMd),
           tile(
             c,
             Icons.water_drop_outlined,
             '${(store.water() / 1000).toStringAsFixed(1)} L',
-            'Water · of 2.5 L',
-            store.water() / 2500,
+            'Water · of ${(waterGoalMl / 1000).toStringAsFixed(1)} L',
+            waterGoalMl <= 0 ? null : store.water() / waterGoalMl,
             () => go(c, const WaterScreen()),
           ),
         ],
@@ -145,11 +148,11 @@ class TodayTab extends StatelessWidget {
             c,
             Icons.directions_walk,
             '${store.steps}',
-            'Daily activity · of 8,000',
-            store.steps / 8000,
+            'Daily activity · of ${store.withThousands(stepGoal)}',
+            stepGoal <= 0 ? null : store.steps / stepGoal,
             () => showLogActivity(c),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: kGapMd),
           tile(
             c,
             Icons.monitor_weight_outlined,

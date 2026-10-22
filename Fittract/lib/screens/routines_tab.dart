@@ -54,7 +54,7 @@ class _RoutinesState extends State<RoutinesTab> {
           hintText: 'Search your routines',
         ),
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: kGapMd),
       SizedBox(
         width: double.infinity,
         child: SegmentedButton<int>(
@@ -87,8 +87,19 @@ class _RoutinesState extends State<RoutinesTab> {
                   ],
                 ),
                 Text('${(e['ex'] as List).length} exercises', style: muted),
-                const SizedBox(height: 10),
+                const SizedBox(height: kGapMd),
                 btn('+ Add to my routines', () {
+                  // Repeated taps must not create identical presets. Only
+                  // exact-name matches of an existing routine are blocked;
+                  // renaming/duplicating via the editor stays possible.
+                  final name = e['name'] as String;
+                  final exists = store.routines.any(
+                    (existing) => existing['name'] == name,
+                  );
+                  if (exists) {
+                    snack(c, '“$name” is already in your routines.');
+                    return;
+                  }
                   store.routines.add({
                     ...e,
                     'id': DateTime.now().millisecondsSinceEpoch,
@@ -110,7 +121,7 @@ class _RoutinesState extends State<RoutinesTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 tag(r['type']),
-                const SizedBox(height: 6),
+                const SizedBox(height: kGapSm),
                 Text(
                   r['name'],
                   style: const TextStyle(
@@ -122,13 +133,11 @@ class _RoutinesState extends State<RoutinesTab> {
                   '${(r['ex'] as List).length} exercises · ~${(r['ex'] as List).length * 7} min',
                   style: muted,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: kGapMd),
+                btn('▷ Start', () => go(c, WorkoutScreen(r))),
+                const SizedBox(height: kGapSm),
                 Row(
                   children: [
-                    Expanded(
-                      child: btn('▷ Start', () => go(c, WorkoutScreen(r))),
-                    ),
-                    const SizedBox(width: 8),
                     Expanded(
                       child: btn(
                         'Edit',
@@ -136,12 +145,23 @@ class _RoutinesState extends State<RoutinesTab> {
                         tonal: true,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: kGapMd),
                     Expanded(
                       child: btn('Delete', () async {
                         if (await confirm(c, 'Delete routine?', 'Delete')) {
                           store.routines.removeWhere((x) => x['id'] == r['id']);
                           store.sch.removeWhere((s) => s['r'] == r['id']);
+                          // Drop the in-progress snapshot only when it
+                          // belongs to this routine; unrelated sessions and
+                          // workout history are left untouched. The snapshot
+                          // records id ?? name as its routine reference.
+                          final active = store.d['activeW'];
+                          if (active is Map) {
+                            final rid = active['rid'];
+                            if (rid == r['id'] || rid == r['name']) {
+                              store.d.remove('activeW');
+                            }
+                          }
                           store.save();
                         }
                       }, danger: true),
@@ -170,14 +190,11 @@ class _EditState extends State<EditRoutine> {
   );
 
   Widget num2(String label, Map e, String k) => Expanded(
-    child: Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: TextFormField(
-        initialValue: '${e[k]}',
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(labelText: label, isDense: true),
-        onChanged: (v) => e[k] = int.tryParse(v) ?? e[k],
-      ),
+    child: TextFormField(
+      initialValue: '${e[k]}',
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: label, isDense: true),
+      onChanged: (v) => e[k] = int.tryParse(v) ?? e[k],
     ),
   );
 
@@ -222,14 +239,16 @@ class _EditState extends State<EditRoutine> {
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Remove ${exs[i]['n']}',
                     onPressed: () => setState(() => exs.removeAt(i)),
                     icon: const Icon(Icons.remove_circle_outline, color: kRed),
                   ),
                 ],
               ),
               Text(exs[i]['m'], style: muted),
-              const SizedBox(height: 8),
+              const SizedBox(height: kGapSm),
               Row(
+                spacing: kGapMd,
                 children: [
                   num2('Sets', exs[i], 's'),
                   num2('Reps/sec', exs[i], 'r'),
@@ -246,10 +265,20 @@ class _EditState extends State<EditRoutine> {
         );
         if (picked != null && mounted) setState(() => exs.addAll(picked));
       }, tonal: true),
-      const SizedBox(height: 10),
+      const SizedBox(height: kGapMd),
       btn('✓ Save routine', () {
         if ((r['name'] as String).trim().isEmpty) {
           return snack(context, 'Name your routine.');
+        }
+        for (final ex in exs) {
+          final err = validateExerciseConfig(
+            ex['s'] as num? ?? 0,
+            ex['r'] as num? ?? 0,
+            ex['rest'] as num? ?? 0,
+          );
+          if (err != null) {
+            return snack(context, "${ex['n']}: $err");
+          }
         }
         r.remove('isNew');
         final i = store.routines.indexWhere((x) => x['id'] == r['id']);

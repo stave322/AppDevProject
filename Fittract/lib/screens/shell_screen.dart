@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../store/store.dart';
@@ -15,14 +17,24 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> with WidgetsBindingObserver {
   int i = 0;
+  Timer? _dayWatch;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Detect midnight rollover while the app stays open. roll() is guarded
+    // by a per-date check, so this poll is a cheap no-op until the date
+    // actually changes.
+    _dayWatch = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => store.roll(),
+    );
   }
 
   @override
   void dispose() {
+    _dayWatch?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

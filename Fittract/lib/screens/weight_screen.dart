@@ -63,6 +63,11 @@ class _WeightState extends State<WeightScreen> {
 
   String get _unit => store.on('lb') ? 'lb' : 'kg';
 
+  /// Weekly workout target, decoded tolerantly (legacy snapshots may hold
+  /// the value as a double) and clamped to the supported 1–7 range.
+  int _weeklyGoal() =>
+      (((store.goal['wk'] as num?) ?? 3).toInt()).clamp(1, 7);
+
   double _displayWeight(double kg) => store.on('lb') ? kg * 2.2046 : kg;
 
   double _weightInKg(double value) => store.on('lb') ? value / 2.2046 : value;
@@ -112,12 +117,13 @@ class _WeightState extends State<WeightScreen> {
                 onSelectionChanged: (s) => setState(() => per = s.first),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapLg),
             SizedBox(
               height: 130,
               width: double.infinity,
               child: CustomPaint(painter: Chart(vals)),
             ),
+            const SizedBox(height: kGapMd),
             Text(
               !hasWeight
                   ? 'Log your first weight to start tracking.'
@@ -139,7 +145,7 @@ class _WeightState extends State<WeightScreen> {
             Row(
               children: [
                 Icon(Icons.monitor_weight_outlined, color: primaryOf(c)),
-                const SizedBox(width: 9),
+                const SizedBox(width: kGapMd),
                 const Expanded(
                   child: Text(
                     "Log today's weight",
@@ -149,12 +155,12 @@ class _WeightState extends State<WeightScreen> {
                 if (hasWeight) tag('LATEST ${store.wt(store.lastW())}'),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: kGapXs),
             Text(
               'Record your progress and keep your trend up to date.',
               style: muted,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapLg),
             TextField(
               controller: weightInput,
               keyboardType: const TextInputType.numberWithOptions(
@@ -167,7 +173,7 @@ class _WeightState extends State<WeightScreen> {
                 prefixIcon: const Icon(Icons.scale_outlined),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             btn('Save weight', () => _saveWeight(c)),
           ],
         ),
@@ -178,7 +184,7 @@ class _WeightState extends State<WeightScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(kGapLg),
               decoration: BoxDecoration(
                 color: tintOf(c),
                 borderRadius: BorderRadius.circular(16),
@@ -186,7 +192,7 @@ class _WeightState extends State<WeightScreen> {
               child: Row(
                 children: [
                   Icon(Icons.flag_outlined, color: primaryOf(c), size: 25),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: kGapMd),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,7 +201,7 @@ class _WeightState extends State<WeightScreen> {
                           gw > 0 ? 'Your target' : 'Set a weight target',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: kGapXs),
                         Text(
                           gw > 0
                               ? '${store.wt(gw)}${td.text.isEmpty ? '' : ' · ${td.text}'}'
@@ -218,7 +224,7 @@ class _WeightState extends State<WeightScreen> {
               ),
             ),
             if (gw > 0) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: kGapSm),
               bar(prog),
               Text(
                 sw > 0
@@ -240,7 +246,7 @@ class _WeightState extends State<WeightScreen> {
                 prefixIcon: const Icon(Icons.track_changes_outlined),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: kGapMd),
             TextField(
               controller: td,
               readOnly: true,
@@ -258,7 +264,7 @@ class _WeightState extends State<WeightScreen> {
                       ),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: kGapLg),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -271,7 +277,7 @@ class _WeightState extends State<WeightScreen> {
               child: Row(
                 children: [
                   Icon(Icons.calendar_view_week_outlined, color: primaryOf(c)),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: kGapMd),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,21 +292,18 @@ class _WeightState extends State<WeightScreen> {
                   ),
                   IconButton.filledTonal(
                     tooltip: 'Decrease weekly workouts',
-                    onPressed: (store.goal['wk'] as int) <= 1
+                    onPressed: _weeklyGoal() <= 1
                         ? null
                         : () {
-                            store.goal['wk'] = max(
-                              1,
-                              (store.goal['wk'] as int) - 1,
-                            );
+                            store.goal['wk'] = max(1, _weeklyGoal() - 1);
                             store.save();
                           },
                     icon: const Icon(Icons.remove),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: kGapMd, vertical: kGapSm),
                     child: Text(
-                      '${store.goal['wk']}',
+                      '${_weeklyGoal()}',
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
@@ -309,13 +312,10 @@ class _WeightState extends State<WeightScreen> {
                   ),
                   IconButton.filledTonal(
                     tooltip: 'Increase weekly workouts',
-                    onPressed: (store.goal['wk'] as int) >= 7
+                    onPressed: _weeklyGoal() >= 7
                         ? null
                         : () {
-                            store.goal['wk'] = min(
-                              7,
-                              (store.goal['wk'] as int) + 1,
-                            );
+                            store.goal['wk'] = min(7, _weeklyGoal() + 1);
                             store.save();
                           },
                     icon: const Icon(Icons.add),
@@ -323,7 +323,7 @@ class _WeightState extends State<WeightScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: kGapLg),
             btn('Save goals', () => _saveGoals(c)),
           ],
         ),
