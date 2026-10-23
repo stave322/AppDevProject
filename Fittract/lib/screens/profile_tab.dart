@@ -220,12 +220,6 @@ class ProfileTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: kGapLg),
-            TextButton.icon(
-              onPressed: () =>
-                  snack(c, 'Profile photo editing is coming soon.'),
-              icon: const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Add profile photo'),
-            ),
             btn(
               '✎  Edit personal details',
               () => editPersonalDetails(c),

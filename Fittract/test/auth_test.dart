@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -126,7 +127,7 @@ void main() {
     /// cloud call that never answers must not be able to pin it open.
     test('a link that never answers still completes registration', () async {
       final s = await freshStore();
-      s.cloudLinkTimeout = const Duration(milliseconds: 50);
+      s.cloudLinkTimeout = const Duration(seconds: 15);
       final hung = <Completer<String?>>[];
       s.cloudLinkOverride = ({required String email, required String password}) {
         final c = Completer<String?>();
@@ -136,13 +137,15 @@ void main() {
 
       final result = await s
           .register(name: 'Ada', email: 'ada@b.com', password: 'password1')
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 1));
 
       expect(result, AuthResult.success);
       // Local outcome is the whole contract: account written, nothing signed
       // in, and the account usable by the login that follows.
       expect(s.hasActiveSession, isFalse);
       expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+      hung.single.complete(null);
+      await pumpEventQueue();
       s.cloudLinkOverride =
           ({required String email, required String password}) async => 'uid';
       expect(
@@ -513,6 +516,36 @@ void main() {
     );
   });
 
+  test('a Firebase-reset password refreshes the local credential on login',
+      () async {
+    final s = await freshStore();
+    await s.register(name: 'A', email: 'a@b.com', password: 'password1');
+    s.cloudLinkOverride =
+        ({required String email, required String password}) async {
+          if (password == 'resetpass') return 'cloud-uid';
+          throw FirebaseAuthException(code: 'wrong-password');
+        };
+
+    expect(
+      await s.login(email: 'a@b.com', password: 'resetpass'),
+      AuthResult.success,
+    );
+    s.signOut();
+
+    // The Firebase-verified password is now also usable as the local
+    // credential, including when cloud authentication is unavailable.
+    s.cloudLinkOverride = null;
+    expect(
+      await s.login(email: 'a@b.com', password: 'resetpass'),
+      AuthResult.success,
+    );
+    s.signOut();
+    expect(
+      await s.login(email: 'a@b.com', password: 'password1'),
+      AuthResult.wrongPassword,
+    );
+  });
+
   test('resetCurrentAccountData keeps identity, profile and goals', () async {
     final s = await freshStore();
     await s.register(name: 'A', email: 'a@b.com', password: 'password1');
@@ -703,6 +736,11 @@ void main() {
         await pbkdf2ChunkedForTest(args),
         pbkdf2SyncForTest(args),
         reason: 'iterations=$iterations keyLength=$keyLength',
+      );
+      expect(
+        await pbkdf2WebForTest(args),
+        pbkdf2SyncForTest(args),
+        reason: 'Web Crypto iterations=$iterations keyLength=$keyLength',
       );
     }
   });

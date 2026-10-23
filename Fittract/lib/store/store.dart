@@ -11,6 +11,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'password_hash_web_stub.dart'
+    if (dart.library.js_interop) 'password_hash_web.dart' as web_hash;
+
 // ───────────────────────── THEME ─────────────────────────
 const kPri = Color(0xFF0A7F6F);
 const kDk = Color(0xFF1A4640);
@@ -450,11 +453,21 @@ Future<Uint8List> _pbkdf2Chunked(Map<String, dynamic> args) async {
   );
 }
 
-/// Dispatches one PBKDF2 derivation. Native targets keep the work in a
-/// background isolate via [compute]; the web uses the slice-yielding twin
-/// because [compute] cannot offload there.
+/// Native targets derive in a background isolate. Web uses the browser's
+/// native Web Crypto implementation, falling back to the yielding Dart
+/// implementation when Web Crypto is unavailable.
 Future<Uint8List> _deriveKey(Map<String, dynamic> args) =>
-    kIsWeb ? _pbkdf2Chunked(args) : compute(_pbkdf2Task, args);
+    kIsWeb ? _deriveWebKey(args) : compute(_pbkdf2Task, args);
+
+Future<Uint8List> _deriveWebKey(Map<String, dynamic> args) async {
+  final result = await web_hash.derivePbkdf2(
+    password: args['password'] as String,
+    salt: args['salt'] as List<int>,
+    iterations: args['iterations'] as int,
+    keyLength: args['keyLength'] as int,
+  );
+  return result ?? _pbkdf2Chunked(args);
+}
 
 @visibleForTesting
 Uint8List pbkdf2SyncForTest(Map<String, dynamic> args) => _pbkdf2Task(args);
@@ -462,6 +475,10 @@ Uint8List pbkdf2SyncForTest(Map<String, dynamic> args) => _pbkdf2Task(args);
 @visibleForTesting
 Future<Uint8List> pbkdf2ChunkedForTest(Map<String, dynamic> args) =>
     _pbkdf2Chunked(args);
+
+@visibleForTesting
+Future<Uint8List> pbkdf2WebForTest(Map<String, dynamic> args) =>
+    _deriveWebKey(args);
 
 bool _constantTimeEquals(List<int> a, List<int> b) {
   if (a.length != b.length) return false;
@@ -1016,40 +1033,32 @@ class Store extends ChangeNotifier {
     _sessionUid = null;
     saveQuiet();
 
-    // The user just asked to create an account, so creating its cloud
-    // counterpart needs no extra dialog. Failure of any kind leaves the
-    // fully functional local account in place; login retries the link.
-    //
-    // The wait is bounded: [FirebaseAuth.createUserWithEmailAndPassword] is
-    // a network call that can stall for minutes or never answer, and it must
-    // not be able to strand the caller (and the button spinner waiting on it)
-    // forever. The detach is also attached to the call itself, so a response
-    // that arrives after we stopped waiting still gets signed out instead of
-    // leaving a live Firebase session behind registration.
-    final link = _establishCloudLink(email: normalized, password: password);
-    String? uid;
-    try {
-      uid = await link.timeout(cloudLinkTimeout);
-    } on TimeoutException {
-      uid = null;
-      _detachAbandonedLink(link);
-    } on Object {
-      // Only the test seam can throw here; production never does. Same
-      // policy as any other cloud failure: the local account stands.
-      uid = null;
-    }
-    // createUserWithEmailAndPassword signs the new user in on this device.
-    // The local session is torn down below, so the remote one must not
-    // outlive it: an auth-state listener must never see a signed-in user
-    // between registration and the manual login that follows.
-    await _detachFirebaseAuth(uid);
-
     // Registration ends exactly like a sign-out: the account (identity,
     // profile, credential) is flushed into its own bucket, the session
     // pointer and any queued sync are cleared, and the single notification
     // this triggers carries the signed-out state only.
     signOut();
+    _linkCloudAccountInBackground(email: normalized, password: password);
     return AuthResult.success;
+  }
+
+  void _linkCloudAccountInBackground({
+    required String email,
+    required String password,
+  }) {
+    final link = _establishCloudLink(email: email, password: password);
+    unawaited(() async {
+      try {
+        final uid = await link.timeout(cloudLinkTimeout);
+        // Firebase account creation also signs in on this device. Keep the
+        // registration flow signed out after the best-effort link completes.
+        await _detachFirebaseAuth(uid);
+      } on TimeoutException {
+        _detachAbandonedLink(link);
+      } on Object {
+        // Cloud linking is optional; the saved local account remains usable.
+      }
+    }());
   }
 
   /// Signs out the cloud user behind a link attempt that [cloudLinkTimeout]
@@ -1114,42 +1123,60 @@ class Store extends ChangeNotifier {
     // record) rather than bypassing the password check.
     if (cred is! Map) return AuthResult.storageError;
 
-    final ok = await _verifyPassword(password, Map<String, dynamic>.from(cred));
-    if (!ok) return AuthResult.wrongPassword;
-
-    // Local password is verified. Now (and only now) consult the cloud.
-    //
-    // The wait is bounded for the reason registration's is: a wedged
-    // sign-in must not pin the button's spinner open forever. A timeout is
-    // reported as a service error *before* any session field is written
-    // below, so it can neither clear nor replace a session that already
-    // exists, and the abandoned call is detached so a response arriving
-    // after the failure cannot sign this device in behind the user's back.
     String? cloudUid;
     Future<String?>? pending;
-    try {
-      pending = _startCloudSignIn(email: normalized, password: password);
-      if (pending != null) cloudUid = await pending.timeout(cloudLinkTimeout);
-    } on TimeoutException {
-      final abandoned = pending;
-      if (abandoned != null) _detachAbandonedLink(abandoned);
-      return AuthResult.serviceError;
-    } on FirebaseAuthException catch (e) {
-      final outcome = await _resolveCloudLoginFailure(
-        code: e.code,
-        email: normalized,
-        password: password,
-        account: account,
-        requestCloudAccountCreation: requestCloudAccountCreation,
-        requestOfflineFallback: requestOfflineFallback,
-      );
-      if (outcome.error != null) return outcome.error!;
-      cloudUid = outcome.uid;
-    } on Object {
-      // Only the test seam can throw here; production answers with a
-      // FirebaseAuthException handled above. Reported like any other cloud
-      // failure rather than escaping to a generic handler.
-      return AuthResult.serviceError;
+    final localPasswordMatches = await _verifyPassword(
+      password,
+      Map<String, dynamic>.from(cred),
+    );
+
+    if (!localPasswordMatches) {
+      // Password-reset emails update Firebase Auth, not this device's local
+      // credential hash. A successful cloud sign-in proves the new password;
+      // use it to refresh the local hash so future/offline logins work too.
+      try {
+        pending = _startCloudSignIn(email: normalized, password: password);
+        if (pending == null) return AuthResult.wrongPassword;
+        cloudUid = await pending.timeout(cloudLinkTimeout);
+        if (cloudUid == null) return AuthResult.wrongPassword;
+      } on TimeoutException {
+        final abandoned = pending;
+        if (abandoned != null) _detachAbandonedLink(abandoned);
+        return AuthResult.serviceError;
+      } on FirebaseAuthException catch (e) {
+        return isTemporaryAuthError(e.code)
+            ? AuthResult.serviceError
+            : AuthResult.wrongPassword;
+      } on Object {
+        return AuthResult.serviceError;
+      }
+
+      account['cred'] = await _hashPassword(password);
+      sp.setString(key, jsonEncode(account));
+    } else {
+      // The local password is valid. Cloud sign-in remains best-effort from
+      // the local credential's point of view, with bounded network waits.
+      try {
+        pending = _startCloudSignIn(email: normalized, password: password);
+        if (pending != null) cloudUid = await pending.timeout(cloudLinkTimeout);
+      } on TimeoutException {
+        final abandoned = pending;
+        if (abandoned != null) _detachAbandonedLink(abandoned);
+        return AuthResult.serviceError;
+      } on FirebaseAuthException catch (e) {
+        final outcome = await _resolveCloudLoginFailure(
+          code: e.code,
+          email: normalized,
+          password: password,
+          account: account,
+          requestCloudAccountCreation: requestCloudAccountCreation,
+          requestOfflineFallback: requestOfflineFallback,
+        );
+        if (outcome.error != null) return outcome.error!;
+        cloudUid = outcome.uid;
+      } on Object {
+        return AuthResult.serviceError;
+      }
     }
 
     d = account;
@@ -1182,8 +1209,8 @@ class Store extends ChangeNotifier {
   }
 
   /// Decides how a post-verification cloud sign-in failure is handled.
-  /// Wrong local credentials never reach this point: the caller rejects
-  /// them before any network call.
+  /// The caller has already verified the local password before resolving
+  /// an ordinary cloud sign-in failure.
   Future<({String? uid, AuthResult? error})> _resolveCloudLoginFailure({
     required String code,
     required String email,

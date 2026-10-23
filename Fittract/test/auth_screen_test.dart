@@ -144,6 +144,27 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
+  testWidgets('Forgot password opens a dedicated email lookup screen', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await store.init();
+
+    await tester.pumpWidget(const App());
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'forgot@example.com');
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Find your account'), findsOneWidget);
+    expect(find.text('Reset your password'), findsOneWidget);
+    expect(find.text('Send reset link'), findsOneWidget);
+    expect(
+      (tester.widget<TextField>(find.byType(TextField).first).controller!.text),
+      'forgot@example.com',
+    );
+  });
+
   testWidgets('Hashing exception resets the Log in button with a message', (
     WidgetTester tester,
   ) async {

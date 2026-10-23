@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../store/store.dart';
 import '../services/google_auth_service.dart';
+import 'forgot_password_screen.dart';
 import '../widgets/shared_widgets.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -82,10 +83,7 @@ class _AuthState extends State<AuthScreen> {
       err = '';
       notice = '';
     });
-    // Paint the busy indicator before hashing starts. On the web, compute()
-    // runs PBKDF2 synchronously on the UI thread for its whole duration, so
-    // without this yield the last pressed-button frame (with its ink ripple)
-    // freezes on screen and the spinner never gets to appear.
+    // Paint the busy indicator before password derivation starts.
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
     AuthResult result;
@@ -131,26 +129,6 @@ class _AuthState extends State<AuthScreen> {
       emailBusy = false;
       err = _messageFor(result);
     });
-  }
-
-  Future<void> forgotPassword() async {
-    final email = em.text.trim();
-    if (email.isEmpty) {
-      snack(context, 'Enter your email address first.');
-      return;
-    }
-    final result = await store.sendPasswordReset(email);
-    if (!mounted) return;
-    final message = switch (result) {
-      AuthResult.success =>
-        'If an account exists for this email, a password reset link is on its way.',
-      AuthResult.unknownEmail =>
-        'No cloud account was found for that email. On-device accounts cannot be reset remotely.',
-      AuthResult.invalidInput => 'Enter a valid email address.',
-      _ =>
-        'Could not reach the account service. Check your connection and try again.',
-    };
-    snack(context, message);
   }
 
   Future<void> signInWithGoogle() async {
@@ -314,7 +292,12 @@ class _AuthState extends State<AuthScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: forgotPassword,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        ForgotPasswordScreen(initialEmail: em.text.trim()),
+                  ),
+                ),
                 child: const Text('Forgot password?'),
               ),
             ),
@@ -339,6 +322,7 @@ class _AuthState extends State<AuthScreen> {
               )
             else
               btn('Continue with Google', signInWithGoogle, tonal: true),
+            const SizedBox(height: kGapLg),
           ],
           TextButton(
             onPressed: () => setState(() {

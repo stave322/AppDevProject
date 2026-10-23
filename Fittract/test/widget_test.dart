@@ -181,7 +181,7 @@ void main() {
     expect(darkApp.themeMode, ThemeMode.dark);
   });
 
-  testWidgets('Profile offers a designed photo placeholder and detail editor', (
+  testWidgets('Profile offers a personal detail editor without photo upload', (
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -195,7 +195,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Add profile photo'), findsOneWidget);
+    expect(find.text('Add profile photo'), findsNothing);
     final editButton = find.textContaining('Edit personal details');
     await tester.ensureVisible(editButton);
     await tester.tap(editButton);
