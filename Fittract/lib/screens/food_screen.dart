@@ -41,7 +41,7 @@ class FoodScreen extends StatelessWidget {
                 children: [
                   SizedBox.expand(
                     child: CircularProgressIndicator(
-                      value: (calories / calorieGoal).clamp(0.0, 1.0),
+                      value: progressOf(calories / calorieGoal),
                       strokeWidth: 10,
                       strokeCap: StrokeCap.round,
                       color: primaryOf(c),
@@ -199,7 +199,7 @@ class FoodScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(
-              _mealIcon(meal['t'] as String? ?? ''),
+              mealIconFor(meal['n'], meal['t']),
               color: primaryOf(context),
             ),
           ),
@@ -259,13 +259,6 @@ class FoodScreen extends StatelessWidget {
         ),
         child: Text('$label ${value ?? 0}g', style: muted),
       );
-
-  IconData _mealIcon(String type) => switch (type.toLowerCase()) {
-    'breakfast' => Icons.free_breakfast_outlined,
-    'lunch' => Icons.lunch_dining_outlined,
-    'snack' => Icons.cookie_outlined,
-    _ => Icons.dinner_dining_outlined,
-  };
 }
 
 class _NutritionGoalsSheet extends StatefulWidget {

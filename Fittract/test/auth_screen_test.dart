@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -175,6 +176,48 @@ void main() {
     expect(store.hasActiveSession, isFalse);
   });
 
+  testWidgets('A cloud sign-in that never answers clears the busy state and reports it', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    pbkdf2IterationsOverride = 1000;
+    await store.init();
+    addTearDown(() {
+      pbkdf2IterationsOverride = 0;
+      store.cloudLinkOverride = null;
+      store.cloudLinkTimeout = const Duration(seconds: 15);
+    });
+
+    await tester.pumpWidget(const App());
+    await tester.pumpAndSettle();
+    // Create the account first, so the login below reaches the cloud step
+    // with a correct local password.
+    await registerThroughForm(tester);
+
+    store.cloudLinkTimeout = const Duration(milliseconds: 500);
+    store.cloudLinkOverride =
+        ({required String email, required String password}) =>
+            Completer<String?>().future;
+
+    await tester.enterText(find.byType(TextField).at(1), 'password123');
+    await tester.tap(find.text('Log in'));
+    await settleHashing(tester);
+
+    // The bounded wait ends: no spinner left behind, the button is usable
+    // again, and the reason is on screen in the store's own words.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Log in'), findsOneWidget);
+    expect(
+      find.text(
+        'Could not reach the account service. Check your connection and try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(store.hasActiveSession, isFalse);
+    expect(store.sessionUid, isNull);
+    expect(find.byType(NavigationBar), findsNothing);
+  });
+
   testWidgets('Login password field toggles visibility without losing text', (
     WidgetTester tester,
   ) async {
@@ -312,5 +355,51 @@ void main() {
     expect(store.hasActiveSession, isTrue);
     expect(store.d['user'], 'reg@example.com');
     expect(store.d['name'], 'Test User');
+  });
+
+  testWidgets('An unexpected Google sign-in failure shows a safe message and clears busy', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await store.init();
+
+    await tester.pumpWidget(const App());
+    await tester.pumpAndSettle();
+
+    // Under test no Firebase/Google SDK answers the plugin channel, so the
+    // attempt fails with an unexpected PlatformException — the class of
+    // error the catch-all fallback exists to absorb.
+    await tester.tap(find.text('Continue with Google'));
+    // One frame after the tap the busy spinner must already paint, before
+    // the async failure arrives.
+    await tester.pump();
+
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await tester.pumpAndSettle();
+
+    // Busy state always clears: no spinner left behind and the button works.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Continue with Google'), findsOneWidget);
+
+    // A short, mapped message is shown instead of silence...
+    expect(
+      find.text('Google sign-in failed. Please try again.'),
+      findsOneWidget,
+    );
+    // ...and no raw error details, channel names or config text leak out.
+    final visible = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data ?? '')
+        .join('\n');
+    expect(visible.contains('PlatformException'), isFalse);
+    expect(visible.contains('channel-error'), isFalse);
+    expect(visible.toLowerCase().contains('pigeon'), isFalse);
+
+    // The failure never authenticates or syncs anything.
+    expect(store.hasActiveSession, isFalse);
+    expect(store.sessionUid, isNull);
+    expect(find.byType(NavigationBar), findsNothing);
   });
 }

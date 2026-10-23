@@ -127,7 +127,7 @@ class _ScheduleState extends State<ScheduleTab> {
     final r = store.routine(s['r']);
     final dt = DateTime.parse(s['d']);
     final isToday = s['d'] == today();
-    final mins = r == null ? 0 : (r['ex'] as List).length * 7;
+    final mins = r == null ? null : (r['ex'] as List).length * 7;
     return card(
       color: isToday ? tintOf(c) : null,
       pad: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -165,7 +165,9 @@ class _ScheduleState extends State<ScheduleTab> {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                   Text(
-                    '${t12(s['t'])} · $mins min${store.on('wr') ? ' · Today reminder on' : ''}',
+                    r == null
+                        ? '${t12(s['t'])} · routine deleted'
+                        : '${t12(s['t'])} · $mins min${store.on('wr') ? ' · Today reminder on' : ''}',
                     style: muted,
                   ),
               ],
@@ -181,9 +183,15 @@ class _ScheduleState extends State<ScheduleTab> {
                 store.save();
               }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'start', child: Text('Start workout')),
-              PopupMenuItem(
+            // No Start action when the routine is gone: it would silently
+            // do nothing. Delete (and re-schedule later) is the way out.
+            itemBuilder: (_) => [
+              if (r != null)
+                const PopupMenuItem(
+                  value: 'start',
+                  child: Text('Start workout'),
+                ),
+              const PopupMenuItem(
                 value: 'delete',
                 child: Text('Delete', style: TextStyle(color: kRed)),
               ),

@@ -27,6 +27,17 @@ const _activities = [
   _Activity('Gym', Icons.fitness_center, 6, 0, 0),
 ];
 
+/// Icon for a recorded activity, reusing the picker's canonical [_activities]
+/// mapping so a log row and the sheet that created it always agree. Unknown
+/// or legacy names get the neutral exercise default.
+IconData activityIconFor(Object? name) {
+  final wanted = (name ?? '').toString().trim().toLowerCase();
+  for (final activity in _activities) {
+    if (activity.name.toLowerCase() == wanted) return activity.icon;
+  }
+  return Icons.fitness_center;
+}
+
 Future<void> showLogActivity(BuildContext context) => showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

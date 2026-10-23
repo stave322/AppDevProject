@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -118,6 +119,274 @@ void main() {
       await s.register(name: 'B', email: 'A@B.COM', password: 'password2'),
       AuthResult.duplicateEmail,
     );
+  });
+
+  group('registration against a cloud link that misbehaves', () {
+    /// The button spinner lasts exactly as long as `register` does, so a
+    /// cloud call that never answers must not be able to pin it open.
+    test('a link that never answers still completes registration', () async {
+      final s = await freshStore();
+      s.cloudLinkTimeout = const Duration(milliseconds: 50);
+      final hung = <Completer<String?>>[];
+      s.cloudLinkOverride = ({required String email, required String password}) {
+        final c = Completer<String?>();
+        hung.add(c);
+        return c.future;
+      };
+
+      final result = await s
+          .register(name: 'Ada', email: 'ada@b.com', password: 'password1')
+          .timeout(const Duration(seconds: 5));
+
+      expect(result, AuthResult.success);
+      // Local outcome is the whole contract: account written, nothing signed
+      // in, and the account usable by the login that follows.
+      expect(s.hasActiveSession, isFalse);
+      expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+      s.cloudLinkOverride =
+          ({required String email, required String password}) async => 'uid';
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.success,
+      );
+      expect(s.d['user'], 'ada@b.com');
+    });
+
+    test('a link that throws still creates the local account', () async {
+      final s = await freshStore();
+      s.cloudLinkOverride =
+          ({required String email, required String password}) =>
+              throw StateError('cloud is down');
+
+      expect(
+        await s.register(name: 'Ada', email: 'ada@b.com', password: 'password1'),
+        AuthResult.success,
+      );
+      expect(s.hasActiveSession, isFalse);
+      expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+    });
+
+    test('the abandoned link answering later changes nothing local', () async {
+      final s = await freshStore();
+      s.cloudLinkTimeout = const Duration(milliseconds: 50);
+      final arrived = <Completer<String?>>[];
+      s.cloudLinkOverride = ({required String email, required String password}) {
+        final c = Completer<String?>();
+        arrived.add(c);
+        return c.future;
+      };
+
+      await s.register(name: 'Ada', email: 'ada@b.com', password: 'password1');
+      await s.register(name: 'Bob', email: 'bob@b.com', password: 'password2');
+      expect(arrived, hasLength(2));
+
+      // Both stalled calls finally answer — one successfully, one with an
+      // error. Registration already gave up on them, so neither may reach
+      // the local session or escape as an unhandled error.
+      arrived[0].complete('uid-late');
+      arrived[1].completeError(StateError('late failure'));
+      await pumpEventQueue();
+
+      expect(s.hasActiveSession, isFalse);
+      expect(s.sessionUid, isNull);
+      expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+      expect(s.sp.getString(emailStorageKey('bob@b.com')), isNotNull);
+      s.cloudLinkOverride =
+          ({required String email, required String password}) async => 'uid';
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.success,
+      );
+      expect(s.d['user'], 'ada@b.com');
+    });
+  });
+
+  group('login against a cloud link that misbehaves', () {
+    Future<Store> signedInAccount() async {
+      final s = await freshStore();
+      await s.register(
+        name: 'Ada',
+        email: 'ada@b.com',
+        password: 'password1',
+      );
+      return s;
+    }
+
+    test('a sign-in that never answers fails with a service error', () async {
+      final s = await signedInAccount();
+      // Production ships this cap; the test tightens it so the wait is short.
+      expect(s.cloudLinkTimeout, const Duration(seconds: 15));
+      s.cloudLinkTimeout = const Duration(milliseconds: 50);
+      s.cloudLinkOverride =
+          ({required String email, required String password}) =>
+              Completer<String?>().future;
+
+      var cloudPrompted = 0;
+      var offlinePrompted = 0;
+      final result = await s
+          .login(
+            email: 'ada@b.com',
+            password: 'password1',
+            requestCloudAccountCreation: (_) async {
+              cloudPrompted++;
+              return true;
+            },
+            requestOfflineFallback: (_) async {
+              offlinePrompted++;
+              return true;
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+
+      // The wait ends and the user is told what happened; a timeout is
+      // reported, not negotiated away behind a dialog nobody has time to
+      // read after fifteen seconds of spinner.
+      expect(result, AuthResult.serviceError);
+      expect(cloudPrompted, 0);
+      expect(offlinePrompted, 0);
+      // No session field was written: nothing signed in, no pointer a
+      // restart could resume from.
+      expect(s.hasActiveSession, isFalse);
+      expect(s.sessionUid, isNull);
+      expect(s.sp.getString('ft_session_meta'), isNull);
+      // The account survives untouched, and a cloud that answers lets the
+      // very same credentials in.
+      expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+      s.cloudLinkOverride =
+          ({required String email, required String password}) async =>
+              'uid-retry';
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.success,
+      );
+      expect(s.sessionUid, 'uid-retry');
+    });
+
+    test('a sign-in that throws is reported as a service error', () async {
+      final s = await signedInAccount();
+      s.cloudLinkOverride =
+          ({required String email, required String password}) =>
+              throw StateError('cloud is down');
+
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.serviceError,
+      );
+      expect(s.hasActiveSession, isFalse);
+      expect(s.sessionUid, isNull);
+      expect(s.sp.getString('ft_session_meta'), isNull);
+      expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+    });
+
+    test('a successful cloud sign-in carries its uid onto the session',
+        () async {
+      final s = await signedInAccount();
+      s.cloudLinkOverride =
+          ({required String email, required String password}) async =>
+              'uid-cloud';
+
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.success,
+      );
+      expect(s.hasActiveSession, isTrue);
+      expect(s.sessionUid, 'uid-cloud');
+      expect(s.isCloudLinked, isTrue);
+      expect(s.d['user'], 'ada@b.com');
+
+      // The uid is part of the session pointer, not of this store instance.
+      final next = await freshStore();
+      expect(next.sessionUid, 'uid-cloud');
+      next.signOut();
+    });
+
+    test('the abandoned sign-in answering later does not sign the device in',
+        () async {
+      final s = await signedInAccount();
+      s.cloudLinkTimeout = const Duration(milliseconds: 50);
+      final late = Completer<String?>();
+      s.cloudLinkOverride =
+          ({required String email, required String password}) => late.future;
+
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.serviceError,
+      );
+      expect(s.hasActiveSession, isFalse);
+
+      // Firebase finally answers — the user has already been told login
+      // failed, so this must not quietly produce a signed-in state.
+      late.complete('uid-late');
+      await pumpEventQueue();
+
+      expect(s.hasActiveSession, isFalse);
+      expect(s.sessionUid, isNull);
+      expect(s.sp.getString('ft_session_meta'), isNull);
+      expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+
+      // An explicit, successful login is still the only way in, and it
+      // claims that same uid for the live session.
+      s.cloudLinkOverride =
+          ({required String email, required String password}) async =>
+              'uid-late';
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.success,
+      );
+      expect(s.sessionUid, 'uid-late');
+    });
+
+    test('the abandoned sign-in failing later surfaces nothing', () async {
+      final s = await signedInAccount();
+      s.cloudLinkTimeout = const Duration(milliseconds: 50);
+      final late = Completer<String?>();
+      s.cloudLinkOverride =
+          ({required String email, required String password}) => late.future;
+
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.serviceError,
+      );
+
+      // A late failure would escape as an unhandled error (and fail this
+      // test) if the abandoned call were simply dropped.
+      late.completeError(StateError('late failure'));
+      await pumpEventQueue();
+
+      expect(s.hasActiveSession, isFalse);
+      expect(s.sessionUid, isNull);
+      expect(s.sp.getString(emailStorageKey('ada@b.com')), isNotNull);
+    });
+
+    test('a timeout never disturbs the session the app is already signed into',
+        () async {
+      final s = await signedInAccount();
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.success,
+      );
+      s.d['steps'] = 4321;
+      s.save();
+      s.d['steps'] = 9999; // live edit, deliberately not flushed yet
+
+      s.cloudLinkTimeout = const Duration(milliseconds: 50);
+      s.cloudLinkOverride =
+          ({required String email, required String password}) =>
+              Completer<String?>().future;
+
+      expect(
+        await s.login(email: 'ada@b.com', password: 'password1'),
+        AuthResult.serviceError,
+      );
+
+      // The timeout returned before the session-writing tail ran: the live
+      // session and its unflushed data are exactly as they were.
+      expect(s.hasActiveSession, isTrue);
+      expect(s.sessionUid, isNull);
+      expect(s.d['user'], 'ada@b.com');
+      expect(s.steps, 9999);
+      expect(s.sp.getString('ft_session_meta'), isNotNull);
+    });
   });
 
   test('login verifies the password and rejects wrong ones', () async {

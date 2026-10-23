@@ -182,6 +182,11 @@ class _AuthState extends State<AuthScreen> {
       _showGoogleError(googleAuthErrorMessage(error));
     } on StateError catch (error) {
       _showGoogleError(googleAuthErrorMessage(error));
+    } catch (error) {
+      // Anything unexpected (plugin-channel failures, unsupported
+      // platforms, …) gets the generic mapped fallback: a short, safe
+      // message with no raw error details, tokens or configuration text.
+      _showGoogleError(googleAuthErrorMessage(error));
     } finally {
       if (mounted) setState(() => googleBusy = false);
     }

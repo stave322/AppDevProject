@@ -78,14 +78,55 @@ class TodayTab extends StatelessWidget {
       ),
       Text('🔥 ${store.streak()}-day streak · Keep showing up.', style: muted),
       const SizedBox(height: 12),
-      if (r != null)
+      if (nx == null)
+        card(
+          child: Column(
+            children: [
+              const Text('Nothing scheduled'),
+              const SizedBox(height: kGapMd),
+              btn('Schedule a workout', () => goTo(2)),
+            ],
+          ),
+        )
+      else if (r == null)
+        // The schedule entry exists but its routine was deleted: say so
+        // rather than claiming the schedule is empty, and offer the way out.
+        card(
+          color: tintOf(c),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'UP NEXT · ${nx['d'] == today() ? 'TODAY' : nx['d']}',
+                style: TextStyle(
+                  color: primaryOf(c),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '(deleted routine)',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${nx['t']} · this workout was deleted. Remove it from your schedule.',
+                style: muted,
+              ),
+              const SizedBox(height: 12),
+              btn('Go to schedule', () => goTo(2), tonal: true),
+            ],
+          ),
+        )
+      else
         card(
           color: kDk,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'UP NEXT · ${nx!['d'] == today() ? 'TODAY' : nx['d']}',
+                'UP NEXT · ${nx['d'] == today() ? 'TODAY' : nx['d']}',
                 style: const TextStyle(
                   color: kMint,
                   fontSize: 11,
@@ -109,16 +150,6 @@ class TodayTab extends StatelessWidget {
               btn('▷  Start workout', () => go(c, WorkoutScreen(r))),
             ],
           ),
-        )
-      else
-        card(
-          child: Column(
-            children: [
-              const Text('Nothing scheduled'),
-              const SizedBox(height: kGapMd),
-              btn('Schedule a workout', () => goTo(2)),
-            ],
-          ),
         ),
       h3('Your daily balance'),
       Row(
@@ -128,7 +159,7 @@ class TodayTab extends StatelessWidget {
             Icons.restaurant,
             '${store.kcal()} kcal',
             'Food & meals',
-            store.kcal() / calorieGoal,
+            calorieGoal <= 0 ? null : store.kcal() / calorieGoal,
             () => go(c, const FoodScreen()),
           ),
           const SizedBox(width: kGapMd),
@@ -170,10 +201,10 @@ class TodayTab extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Last week's workouts · ${store.wkCount(0)} / ${store.goal['wk']}",
+              "Last week's workouts · ${store.wkCount(0)} / ${store.weeklyWorkoutGoal}",
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            bar(store.wkCount(0) / (store.goal['wk'] as num)),
+            bar(store.wkCount(0) / store.weeklyWorkoutGoal),
           ],
         ),
       ),

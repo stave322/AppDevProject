@@ -623,6 +623,15 @@ class Store extends ChangeNotifier {
   Future<String?> Function({required String email, required String password})?
   cloudLinkOverride;
 
+  /// Upper bound on the cloud sign-in [register] and [login] make after the
+  /// local credential has been verified. Firebase's own network timeout is
+  /// measured in minutes and a wedged response can take even longer or never
+  /// arrive at all, so without this the auth button's spinner waits forever
+  /// on a call both flows are built to survive the failure of. Generous for a
+  /// slow mobile network, far below the point where a spinner looks frozen.
+  @visibleForTesting
+  Duration cloudLinkTimeout = const Duration(seconds: 15);
+
   /// Firestore is configured, or a test seam stands in for it: sync may run.
   bool get _cloudReady => _firebaseReady || cloudUserDoc != null;
 
@@ -1010,10 +1019,25 @@ class Store extends ChangeNotifier {
     // The user just asked to create an account, so creating its cloud
     // counterpart needs no extra dialog. Failure of any kind leaves the
     // fully functional local account in place; login retries the link.
-    final uid = await _establishCloudLink(
-      email: normalized,
-      password: password,
-    );
+    //
+    // The wait is bounded: [FirebaseAuth.createUserWithEmailAndPassword] is
+    // a network call that can stall for minutes or never answer, and it must
+    // not be able to strand the caller (and the button spinner waiting on it)
+    // forever. The detach is also attached to the call itself, so a response
+    // that arrives after we stopped waiting still gets signed out instead of
+    // leaving a live Firebase session behind registration.
+    final link = _establishCloudLink(email: normalized, password: password);
+    String? uid;
+    try {
+      uid = await link.timeout(cloudLinkTimeout);
+    } on TimeoutException {
+      uid = null;
+      _detachAbandonedLink(link);
+    } on Object {
+      // Only the test seam can throw here; production never does. Same
+      // policy as any other cloud failure: the local account stands.
+      uid = null;
+    }
     // createUserWithEmailAndPassword signs the new user in on this device.
     // The local session is torn down below, so the remote one must not
     // outlive it: an auth-state listener must never see a signed-in user
@@ -1028,14 +1052,29 @@ class Store extends ChangeNotifier {
     return AuthResult.success;
   }
 
-  /// Detaches the Firebase session [register] just created. Only the user
-  /// that was just created is signed out: any other (e.g. Google) session
-  /// that happens to be present is left untouched. Best-effort — the local
-  /// teardown is what gates the app.
-  Future<void> _detachFirebaseAuth(String? registeredUid) async {
-    if (!_firebaseReady || registeredUid == null) return;
+  /// Signs out the cloud user behind a link attempt that [cloudLinkTimeout]
+  /// made [register] or [login] stop waiting for. Firebase does not cancel
+  /// its call when the wait is abandoned, so a response arriving minutes
+  /// later would otherwise leave this device signed in to a session the user
+  /// has already been told never happened. Runs detached and swallows its
+  /// own failures: by then there is nobody left to report them to.
+  void _detachAbandonedLink(Future<String?> abandoned) {
+    unawaited(abandoned.then<void>(_detachFirebaseAuth, onError: (_) {}));
+  }
+
+  /// Signs out the Firebase session a cloud link just created or restored —
+  /// by [register] before its local teardown, or by [_detachAbandonedLink]
+  /// for a response that arrived after the wait was abandoned. Only that one
+  /// user is signed out: any other (e.g. Google) session is left untouched,
+  /// and so is a uid the app has since signed into — re-signing the very
+  /// account being registered or logged in yields the same uid, and pulling
+  /// it out from under a live session would silently sign that session's
+  /// cloud side off. Best-effort — the local state is what gates the app.
+  Future<void> _detachFirebaseAuth(String? uid) async {
+    if (!_firebaseReady || uid == null) return;
+    if (_sessionUid == uid) return;
     try {
-      if (_auth.currentUser?.uid == registeredUid) {
+      if (_auth.currentUser?.uid == uid) {
         await _auth.signOut();
       }
     } catch (_) {
@@ -1079,31 +1118,38 @@ class Store extends ChangeNotifier {
     if (!ok) return AuthResult.wrongPassword;
 
     // Local password is verified. Now (and only now) consult the cloud.
+    //
+    // The wait is bounded for the reason registration's is: a wedged
+    // sign-in must not pin the button's spinner open forever. A timeout is
+    // reported as a service error *before* any session field is written
+    // below, so it can neither clear nor replace a session that already
+    // exists, and the abandoned call is detached so a response arriving
+    // after the failure cannot sign this device in behind the user's back.
     String? cloudUid;
-    final linkOverride = cloudLinkOverride;
-    if (linkOverride != null) {
-      // Test seam standing in for Firebase's email/password sign-in — the
-      // same one registration and migration use. Production never sets it.
-      cloudUid = await linkOverride(email: normalized, password: password);
-    } else if (_firebaseReady) {
-      try {
-        final credential = await _auth.signInWithEmailAndPassword(
-          email: normalized,
-          password: password,
-        );
-        cloudUid = credential.user?.uid;
-      } on FirebaseAuthException catch (e) {
-        final outcome = await _resolveCloudLoginFailure(
-          code: e.code,
-          email: normalized,
-          password: password,
-          account: account,
-          requestCloudAccountCreation: requestCloudAccountCreation,
-          requestOfflineFallback: requestOfflineFallback,
-        );
-        if (outcome.error != null) return outcome.error!;
-        cloudUid = outcome.uid;
-      }
+    Future<String?>? pending;
+    try {
+      pending = _startCloudSignIn(email: normalized, password: password);
+      if (pending != null) cloudUid = await pending.timeout(cloudLinkTimeout);
+    } on TimeoutException {
+      final abandoned = pending;
+      if (abandoned != null) _detachAbandonedLink(abandoned);
+      return AuthResult.serviceError;
+    } on FirebaseAuthException catch (e) {
+      final outcome = await _resolveCloudLoginFailure(
+        code: e.code,
+        email: normalized,
+        password: password,
+        account: account,
+        requestCloudAccountCreation: requestCloudAccountCreation,
+        requestOfflineFallback: requestOfflineFallback,
+      );
+      if (outcome.error != null) return outcome.error!;
+      cloudUid = outcome.uid;
+    } on Object {
+      // Only the test seam can throw here; production answers with a
+      // FirebaseAuthException handled above. Reported like any other cloud
+      // failure rather than escaping to a generic handler.
+      return AuthResult.serviceError;
     }
 
     d = account;
@@ -1117,6 +1163,22 @@ class Store extends ChangeNotifier {
     save();
     if (cloudUid != null) unawaited(_pullFromCloud());
     return AuthResult.success;
+  }
+
+  /// The cloud half of [login]: the test seam when one is set, Firebase's
+  /// email/password sign-in otherwise, and null when no cloud is configured —
+  /// the verified local account then signs in on its own. Resolves to the uid
+  /// login stores on the session; the credential itself is of no use here.
+  Future<String?>? _startCloudSignIn({
+    required String email,
+    required String password,
+  }) {
+    final override = cloudLinkOverride;
+    if (override != null) return override(email: email, password: password);
+    if (!_firebaseReady) return null;
+    return _auth
+        .signInWithEmailAndPassword(email: email, password: password)
+        .then<String?>((credential) => credential.user?.uid);
   }
 
   /// Decides how a post-verification cloud sign-in failure is handled.
@@ -1149,22 +1211,45 @@ class Store extends ChangeNotifier {
           sp.setString(emailStorageKey(email), jsonEncode(account));
           return (uid: null, error: null);
         }
+        // Both calls below are bounded for the reason login's own sign-in
+        // is: the user has already waited one spinner out, and a wedged
+        // response must not pin this one open. A timeout is reported exactly
+        // like any other cloud failure, and the abandoned call is detached
+        // so a late response cannot sign this device in behind the scenes.
+        Future<UserCredential>? creating;
         try {
-          final credential = await _auth.createUserWithEmailAndPassword(
+          creating = _auth.createUserWithEmailAndPassword(
             email: email,
             password: password,
           );
+          final credential = await creating.timeout(cloudLinkTimeout);
           return (uid: credential.user?.uid, error: null);
+        } on TimeoutException {
+          final abandoned = creating;
+          if (abandoned != null) {
+            _detachAbandonedLink(abandoned.then<String?>((c) => c.user?.uid));
+          }
+          return (uid: null, error: AuthResult.serviceError);
         } on FirebaseAuthException catch (e) {
           if (e.code == 'email-already-in-use') {
             // Raced with another device that created it (possibly with a
             // different password). Adopt it only if these credentials work.
+            Future<UserCredential>? adopting;
             try {
-              final credential = await _auth.signInWithEmailAndPassword(
+              adopting = _auth.signInWithEmailAndPassword(
                 email: email,
                 password: password,
               );
+              final credential = await adopting.timeout(cloudLinkTimeout);
               return (uid: credential.user?.uid, error: null);
+            } on TimeoutException {
+              final abandoned = adopting;
+              if (abandoned != null) {
+                _detachAbandonedLink(
+                  abandoned.then<String?>((c) => c.user?.uid),
+                );
+              }
+              return (uid: null, error: AuthResult.serviceError);
             } on FirebaseAuthException {
               return (uid: null, error: AuthResult.serviceError);
             }
@@ -1822,7 +1907,13 @@ class Store extends ChangeNotifier {
         ? Map<String, dynamic>.from(saved)
         : <String, dynamic>{};
     for (final entry in defaults.entries) {
-      goals.putIfAbsent(entry.key, () => entry.value);
+      final v = goals[entry.key];
+      // Fill missing keys and replace zero, negative or non-numeric values
+      // with the default, so a malformed snapshot can never feed a
+      // division-by-zero into the UI. Valid stored goals are left untouched.
+      if (v is! num || v <= 0) {
+        goals[entry.key] = entry.value;
+      }
     }
     d['nutritionGoals'] = goals;
     return goals;
@@ -1884,9 +1975,26 @@ class Store extends ChangeNotifier {
     return w.isEmpty ? 0 : (w.last[1] as num).toDouble();
   }
 
+  /// One field of the weight-goal map, decoded tolerantly. Legacy or corrupt
+  /// snapshots may hold nulls, strings, or simply lack the key; anything
+  /// non-numeric reads as 0 (unset) instead of throwing a cast error.
+  double goalField(String key) {
+    final v = goal[key];
+    return v is num ? v.toDouble() : 0.0;
+  }
+
+  /// Weekly workout target, decoded tolerantly and clamped to 1–7. Mirrors
+  /// the pattern WeightScreen already used privately: a missing or
+  /// non-numeric `wk` falls back to the default of 3, and a malformed zero
+  /// clamps up to 1, so it can never feed a division or a cast error.
+  int get weeklyWorkoutGoal {
+    final v = goal['wk'];
+    return (v is num ? v.toInt() : 3).clamp(1, 7);
+  }
+
   double goalProgress() {
-    final start = (goal['sw'] as num).toDouble();
-    final target = (goal['w'] as num).toDouble();
+    final start = goalField('sw');
+    final target = goalField('w');
     if (start <= 0 || target <= 0 || start == target || lastW() <= 0) return 0;
     return ((start - lastW()) / (start - target)).clamp(0.0, 1.0);
   }

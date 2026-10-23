@@ -61,7 +61,10 @@ class _ProgressState extends State<ProgressTab> {
           const SizedBox(height: 6),
           const Text('✓ Completed', style: TextStyle(color: kPri, fontSize: 12)),
         ])),
-      btn(all ? 'Show less' : 'View all', () => setState(() => all = !all), tonal: true),
+      // Only offer the toggle when there is history to expand; a "View all"
+      // button over an empty list is dead UI.
+      if (hist.isNotEmpty)
+        btn(all ? 'Show less' : 'View all', () => setState(() => all = !all), tonal: true),
     ];
   }
 
@@ -104,14 +107,14 @@ class _ProgressState extends State<ProgressTab> {
 
   @override
   Widget build(BuildContext context) => live((c) {
-        final sw = (store.goal['sw'] as num).toDouble(), gw = (store.goal['w'] as num).toDouble();
+        final sw = store.goalField('sw'), gw = store.goalField('w');
     final hasWeight = (store.d['weights'] as List).isNotEmpty;
     final body = tab == 0
         ? overview(c)
         : tab == 1
             ? [card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(hasWeight ? store.wt(store.lastW()) : 'Not logged yet', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)), Text(hasWeight ? 'Started at ${store.wt(sw)}' : 'Log your first weight to start tracking.', style: muted)])), btn('Open weight tracker', () => go(c, const WeightScreen()))]
             : tab == 2
-                ? [card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(gw > 0 ? 'Target ${store.wt(gw)}${store.goal['d'] == '' ? '' : ' by ${store.goal['d']}'}' : 'No weight goal set yet', style: const TextStyle(fontWeight: FontWeight.w700)), bar(store.goalProgress()), Text('Weekly workouts goal: ${store.goal['wk']} (this week ${store.wkCount(0)})', style: muted)])), btn('Edit goals', () => go(c, const WeightScreen()))]
+                ? [card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(gw > 0 ? 'Target ${store.wt(gw)}${store.goal['d'] == '' ? '' : ' by ${store.goal['d']}'}' : 'No weight goal set yet', style: const TextStyle(fontWeight: FontWeight.w700)), bar(store.goalProgress()), Text('Weekly workouts goal: ${store.weeklyWorkoutGoal} (this week ${store.wkCount(0)})', style: muted)])), btn('Edit goals', () => go(c, const WeightScreen()))]
                     : daily();
         return tabBody([
           hdr(c, 'Your progress', "See how far you've come."),

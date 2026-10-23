@@ -170,6 +170,26 @@ const _mealOptions = [
 
 const _mealTypes = ['All', 'Breakfast', 'Lunch', 'Snack', 'Dinner'];
 
+/// Icon for a meal entry, used identically by the picker and the food log so
+/// a meal's icon never changes between choosing it and seeing it logged.
+/// Preset meals keep their picker icon by name — deterministic and stable
+/// across save/reload without persisting an [IconData], which could not
+/// survive JSON or cross to another platform. Anything else falls back to the
+/// meal-type icon, and a missing/unknown type gets the dinner default, which
+/// keeps legacy meals (no icon metadata ever stored) rendering safely.
+IconData mealIconFor(Object? name, Object? type) {
+  final n = (name ?? '').toString().trim().toLowerCase();
+  for (final option in _mealOptions) {
+    if (option.name.toLowerCase() == n) return option.icon;
+  }
+  return switch ((type ?? '').toString().trim().toLowerCase()) {
+    'breakfast' => Icons.free_breakfast_outlined,
+    'lunch' => Icons.lunch_dining_outlined,
+    'snack' => Icons.cookie_outlined,
+    _ => Icons.dinner_dining_outlined,
+  };
+}
+
 class MealPickerScreen extends StatefulWidget {
   const MealPickerScreen({super.key});
 
@@ -309,7 +329,10 @@ class _MealPickerScreenState extends State<MealPickerScreen> {
             color: tintOf(context),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(meal.icon, color: primaryOf(context)),
+          child: Icon(
+            mealIconFor(meal.name, meal.type),
+            color: primaryOf(context),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(

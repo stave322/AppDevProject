@@ -127,9 +127,16 @@ class WaterScreen extends StatelessWidget {
                       final f = await form(c, 'Custom amount', [
                         F('ml', 'Millilitres', '330', type: 'number'),
                       ], ok: 'Add');
-                      if (f != null && num_(f['ml']) > 0) {
-                        addW(num_(f['ml']).round());
+                      if (f == null || !c.mounted) return;
+                      final ml = double.tryParse((f['ml'] ?? '').trim());
+                      if (ml == null || ml <= 0) {
+                        snack(
+                          c,
+                          'Enter a positive amount of millilitres.',
+                        );
+                        return;
                       }
+                      addW(ml.round());
                     },
                     style: FilledButton.styleFrom(
                       backgroundColor: tintOf(c),
@@ -154,12 +161,14 @@ class WaterScreen extends StatelessWidget {
             style: muted,
           ),
           TextButton(
-            onPressed: () {
-              if (todays.isNotEmpty) {
-                wl.remove(todays.last);
-                store.save();
-              }
-            },
+            // Disabled when there is nothing to undo, so the action always
+            // does what it says instead of silently ignoring a tap.
+            onPressed: todays.isEmpty
+                ? null
+                : () {
+                    wl.remove(todays.last);
+                    store.save();
+                  },
             child: const Text('Undo'),
           ),
         ],
@@ -194,15 +203,27 @@ class WaterScreen extends StatelessWidget {
           ],
         ),
       ),
-      for (int i = 0; i < store.acts.length; i++)
+      for (final activity in List.of(store.acts))
         card(
           onTap: () async {
+            // Capture the activity itself, not a list index: the confirm
+            // dialog is async, and the list can change (e.g. the midnight
+            // rollover) while it is open. Remove only this exact entry, and
+            // only if it is still present.
             if (await confirm(c, 'Remove this activity?', 'Remove')) {
+              final idx = store.acts.indexOf(activity);
+              if (idx < 0) {
+                if (c.mounted) {
+                  snack(c, 'That activity is no longer in the list.');
+                }
+                return;
+              }
+              final steps = activity['st'];
               store.d['steps'] = max(
                 0,
-                store.steps - (store.acts[i]['st'] as num).toInt(),
+                store.steps - (steps is num ? steps.toInt() : 0),
               );
-              store.acts.removeAt(i);
+              store.acts.removeAt(idx);
               store.save();
             }
           },
@@ -210,7 +231,10 @@ class WaterScreen extends StatelessWidget {
             children: [
               CircleAvatar(
                 backgroundColor: tintOf(c),
-                child: Icon(Icons.directions_run, color: primaryOf(c)),
+                child: Icon(
+                  activityIconFor(activity['n']),
+                  color: primaryOf(c),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -218,17 +242,20 @@ class WaterScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      store.acts[i]['n'],
+                      '${activity['n']}',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     Text(
-                      '${store.acts[i]['t'] != null ? '${tf(store.acts[i]['t'])} · ' : ''}${store.acts[i]['min']} min · ${store.acts[i]['km']} km',
+                      '${activity['t'] != null ? '${tf(activity['t'])} · ' : ''}${activity['min']} min · ${activity['km']} km',
                       style: muted,
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: kMut),
+              // The whole row's tap action is delete-with-confirmation, so
+              // the trailing glyph says exactly that instead of a chevron
+              // implying navigation. Confirmation stays on the row tap.
+              Icon(Icons.delete_outline, color: kRed, semanticLabel: 'Remove activity'),
             ],
           ),
         ),

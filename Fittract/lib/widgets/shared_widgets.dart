@@ -39,13 +39,92 @@ Widget card({
   ),
 );
 
+/// Clamps [p] into 0..1 for progress widgets. Unlike a bare `.clamp`, this
+/// never propagates NaN (0/0 from a zero-denominator goal) or infinities
+/// (n/0) into [LinearProgressIndicator]/[CircularProgressIndicator], which
+/// would otherwise throw or paint garbage.
+double progressOf(double p) {
+  if (p.isNaN) return 0.0;
+  if (p == double.infinity) return 1.0;
+  if (p == double.negativeInfinity) return 0.0;
+  return p.clamp(0.0, 1.0);
+}
+
+/// Shared exercise icon selection for the library, routine rows, and the live
+/// workout card, so the same movement always gets the same icon everywhere.
+/// Selection order: movement identity (only where Material has a genuinely
+/// matching icon), bodyweight figure (no equipment implied), equipment cue,
+/// muscle-group category for custom/legacy exercises, then the neutral
+/// dumbbell default. Category icons stay honest: nothing here pretends to
+/// depict an exercise Material cannot depict.
+IconData exerciseIconFor(Object? name, [Object? group]) {
+  final n = (name ?? '').toString().trim().toLowerCase();
+  bool has(List<String> cues) => cues.any(n.contains);
+
+  // Movements Material depicts directly.
+  if (has(['run', 'sprint', 'jog'])) return Icons.directions_run;
+  if (has(['cycl', 'bike'])) return Icons.directions_bike;
+  if (has(['swim'])) return Icons.pool;
+  if (has(['yoga', 'pilates', 'plank'])) return Icons.self_improvement;
+
+  // Bodyweight work: a plain figure, no equipment implied.
+  if (has([
+    'bodyweight',
+    'push-up',
+    'pushup',
+    'lunge',
+    'bridge',
+    'jack',
+    'knee',
+    'burpee',
+    'climber',
+    'twist',
+    'crunch',
+    'bug',
+    'jump',
+    'sit-up',
+  ])) {
+    return Icons.accessibility_new;
+  }
+
+  // Loaded / equipment work.
+  if (has([
+    'barbell',
+    'dumbbell',
+    'kettlebell',
+    'cable',
+    'machine',
+    'bench',
+    'deadlift',
+    'curl',
+    'press',
+    'row',
+    'pull',
+    'raise',
+    'pushdown',
+    'goblet',
+    'squat',
+    'lift',
+    'fly',
+  ])) {
+    return Icons.fitness_center;
+  }
+
+  // Muscle-group category for custom or legacy exercises.
+  return switch ((group ?? '').toString().trim().toLowerCase()) {
+    'cardio' => Icons.bolt,
+    'core' => Icons.self_improvement,
+    _ => Icons.fitness_center,
+  };
+}
+
 Widget bar(double p, {bool dark = false}) => Padding(
   padding: const EdgeInsets.symmetric(vertical: 6),
   child: Builder(
     builder: (context) => ClipRRect(
       borderRadius: BorderRadius.circular(9),
       child: LinearProgressIndicator(
-        value: p.clamp(0.0, 1.0),
+        value: progressOf(p),
         minHeight: 6,
         color: dark ? kMint : primaryOf(context),
         backgroundColor: dark
@@ -301,9 +380,44 @@ Future<Map<String, String>?> form(
   String title,
   List<F> fs, {
   String ok = 'Save',
-}) async {
-  final ctl = {for (final f in fs) f.k: TextEditingController(text: f.v)};
-  Widget buildField(BuildContext dc, F f) => f.type == 'choice'
+}) => showDialog<Map<String, String>>(
+  context: c,
+  builder: (dc) => _FormDialog(title: title, fs: fs, ok: ok),
+);
+
+/// Dialog body that owns its text controllers: they are created in
+/// [initState] and disposed in [dispose], i.e. when the dialog unmounts after
+/// its exit animation. Disposing eagerly when the route future completes (the
+/// previous behavior) hit rebuilds of still-animating [TextField]s with dead
+/// controllers.
+class _FormDialog extends StatefulWidget {
+  const _FormDialog({required this.title, required this.fs, this.ok = 'Save'});
+  final String title;
+  final List<F> fs;
+  final String ok;
+
+  @override
+  State<_FormDialog> createState() => _FormDialogState();
+}
+
+class _FormDialogState extends State<_FormDialog> {
+  late final Map<String, TextEditingController> ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    ctl = {for (final f in widget.fs) f.k: TextEditingController(text: f.v)};
+  }
+
+  @override
+  void dispose() {
+    for (final controller in ctl.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget buildField(F f) => f.type == 'choice'
       ? StatefulBuilder(
           builder: (ctx, ss) => DropdownButtonFormField<String>(
             initialValue: ctl[f.k]!.text,
@@ -328,67 +442,60 @@ Future<Map<String, String>?> form(
           onTap: () async {
             if (f.type == 'date') {
               final p = await showDatePicker(
-                context: dc,
+                context: context,
                 initialDate:
                     DateTime.tryParse(ctl[f.k]!.text) ?? DateTime.now(),
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
               );
-              if (p != null) ctl[f.k]!.text = isoOf(p);
+              if (p == null || !mounted) return;
+              ctl[f.k]!.text = isoOf(p);
             } else if (f.type == 'time') {
               final parts = ctl[f.k]!.text.split(':');
               final hour = parts.isNotEmpty ? int.tryParse(parts[0]) : null;
               final minute = parts.length > 1 ? int.tryParse(parts[1]) : null;
               final p = await showTimePicker(
-                context: dc,
+                context: context,
                 initialTime: TimeOfDay(hour: hour ?? 18, minute: minute ?? 0),
               );
-              if (p != null) {
-                ctl[f.k]!.text =
-                    '${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}';
-              }
+              if (p == null || !mounted) return;
+              ctl[f.k]!.text =
+                  '${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}';
             }
           },
         );
-  try {
-    return await showDialog<Map<String, String>>(
-      context: c,
-      builder: (dc) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < fs.length; i++) ...[
-                if (i > 0) const SizedBox(height: kGapMd),
-                buildField(dc, fs[i]),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dc),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dc, {
-              for (final e in ctl.entries) e.key: e.value.text,
-            }),
-            style: FilledButton.styleFrom(
-              backgroundColor: primaryOf(dc),
-              foregroundColor: Theme.of(dc).colorScheme.onPrimary,
-            ),
-            child: Text(ok),
-          ),
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < widget.fs.length; i++) ...[
+            if (i > 0) const SizedBox(height: kGapMd),
+            buildField(widget.fs[i]),
+          ],
         ],
       ),
-    );
-  } finally {
-    for (final controller in ctl.values) {
-      controller.dispose();
-    }
-  }
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, {
+          for (final e in ctl.entries) e.key: e.value.text,
+        }),
+        style: FilledButton.styleFrom(
+          backgroundColor: primaryOf(context),
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        ),
+        child: Text(widget.ok),
+      ),
+    ],
+  );
 }
 
 double num_(String? s) => double.tryParse(s ?? '') ?? 0;

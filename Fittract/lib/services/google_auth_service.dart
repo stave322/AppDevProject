@@ -1,9 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class GoogleAuthService {
   static bool _googleSignInInitialized = false;
+
+  /// Test seam replacing the sign-out routine so widget tests can simulate a
+  /// remote failure without a live Firebase/Google SDK. Null in production.
+  @visibleForTesting
+  static Future<void> Function()? debugSignOutOverride;
 
   Future<UserCredential> signIn() async {
     if (Firebase.apps.isEmpty) {
@@ -29,6 +35,8 @@ class GoogleAuthService {
   }
 
   Future<void> signOut() async {
+    final override = debugSignOutOverride;
+    if (override != null) return override();
     if (Firebase.apps.isEmpty) return;
     await FirebaseAuth.instance.signOut();
     if (_googleSignInInitialized) {

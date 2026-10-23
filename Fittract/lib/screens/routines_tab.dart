@@ -189,6 +189,18 @@ class _EditState extends State<EditRoutine> {
     jsonDecode(jsonEncode(widget.src)),
   );
 
+  /// One stable key per exercise row. Index-suffixed keys (or names alone)
+  /// shift when a row is removed, which re-creates every later TextFormField
+  /// and drops its focus and in-progress value; these keys travel with their
+  /// row instead. Kept in lockstep with `exs` (same length, same order).
+  late final List<Key> _rowKeys;
+
+  @override
+  void initState() {
+    super.initState();
+    _rowKeys = [for (final _ in r['ex'] as List) UniqueKey()];
+  }
+
   Widget num2(String label, Map e, String k) => Expanded(
     child: TextFormField(
       initialValue: '${e[k]}',
@@ -226,12 +238,18 @@ class _EditState extends State<EditRoutine> {
         ),
       for (int i = 0; i < exs.length; i++)
         cardKey(
-          key: ValueKey('${exs[i]['n']}$i'),
+          key: _rowKeys[i],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
+                  Icon(
+                    exerciseIconFor(exs[i]['n'], exs[i]['m']),
+                    color: primaryOf(context),
+                    size: 19,
+                  ),
+                  const SizedBox(width: kGapSm),
                   Expanded(
                     child: Text(
                       exs[i]['n'],
@@ -240,7 +258,10 @@ class _EditState extends State<EditRoutine> {
                   ),
                   IconButton(
                     tooltip: 'Remove ${exs[i]['n']}',
-                    onPressed: () => setState(() => exs.removeAt(i)),
+                    onPressed: () => setState(() {
+                      exs.removeAt(i);
+                      _rowKeys.removeAt(i);
+                    }),
                     icon: const Icon(Icons.remove_circle_outline, color: kRed),
                   ),
                 ],
@@ -263,12 +284,22 @@ class _EditState extends State<EditRoutine> {
           context,
           const ExerciseLibraryScreen(title: 'Add exercises'),
         );
-        if (picked != null && mounted) setState(() => exs.addAll(picked));
+        if (picked != null && mounted) {
+          setState(() {
+            exs.addAll(picked);
+            _rowKeys.addAll([for (final _ in picked) UniqueKey()]);
+          });
+        }
       }, tonal: true),
       const SizedBox(height: kGapMd),
       btn('✓ Save routine', () {
         if ((r['name'] as String).trim().isEmpty) {
           return snack(context, 'Name your routine.');
+        }
+        if (exs.isEmpty) {
+          // An empty routine would open a workout with nothing to do and no
+          // way to finish it; refuse it at the door instead.
+          return snack(context, 'Add at least one exercise before saving.');
         }
         for (final ex in exs) {
           final err = validateExerciseConfig(

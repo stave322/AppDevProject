@@ -81,7 +81,7 @@ class ProfileTab extends StatelessWidget {
     final weight = details['weight'] as double?;
     if (weight != null) {
       final weights = store.d['weights'] as List;
-      if (weights.isEmpty && (store.goal['sw'] as num) == 0) {
+      if (weights.isEmpty && store.goalField('sw') == 0) {
         store.goal['sw'] = weight;
       }
       weights.removeWhere((entry) => entry[0] == today());
@@ -352,21 +352,27 @@ class ProfileTab extends StatelessWidget {
         ),
       ),
       btn('Log out', () async {
+        // Local-first sign-out: the device session always ends, even when the
+        // remote Google/Firebase sign-out fails. The failure is surfaced as a
+        // warning while this screen is still mounted, then local sign-out
+        // proceeds unconditionally so a flaky network can never trap the
+        // user in a signed-in state.
+        String? remoteWarning;
         if (!store.isEmailAccount && store.hasActiveSession) {
           try {
             await GoogleAuthService().signOut();
           } on FirebaseAuthException catch (error) {
-            if (!c.mounted) return;
-            snack(c, googleAuthErrorMessage(error));
-            return;
+            remoteWarning = googleAuthErrorMessage(error);
           } on FirebaseException catch (error) {
-            if (!c.mounted) return;
-            snack(c, googleAuthErrorMessage(error));
-            return;
+            remoteWarning = googleAuthErrorMessage(error);
           } on GoogleSignInException catch (error) {
-            if (!c.mounted) return;
-            snack(c, googleAuthErrorMessage(error));
+            remoteWarning = googleAuthErrorMessage(error);
           }
+        }
+        if (remoteWarning != null &&
+            remoteWarning.isNotEmpty &&
+            c.mounted) {
+          snack(c, '$remoteWarning You are signed out on this device.');
         }
         await store.signOutAsync();
       }, tonal: true),

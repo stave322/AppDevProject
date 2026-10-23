@@ -12,7 +12,10 @@ class WorkoutScreen extends StatefulWidget {
 }
 
 class _WorkoutState extends State<WorkoutScreen> {
-  late List exs = widget.r['ex'] as List;
+  // A malformed routine (missing or non-list `ex`) must never crash the
+  // screen: treat it as empty, which the build renders as an explanatory
+  // card with only Discard/leave available.
+  late List exs = widget.r['ex'] is List ? widget.r['ex'] as List : <dynamic>[];
   int i = 0, secs = 0;
   bool paused = false;
   bool _allowLeave = false;
@@ -27,6 +30,9 @@ class _WorkoutState extends State<WorkoutScreen> {
 
   dynamic get _rid => widget.r['id'] ?? widget.r['name'];
 
+  /// An empty session is never worth recovering, so it is never snapshotted.
+  bool get _isEmptyRoutine => exs.isEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -34,7 +40,7 @@ class _WorkoutState extends State<WorkoutScreen> {
     sets = _freshSets();
     _adoptSavedProgress();
     tm = Timer.periodic(const Duration(seconds: 1), _tick);
-    if (!_blockedByOtherSession) _persist();
+    if (!_blockedByOtherSession && !_isEmptyRoutine) _persist();
     if (_restoredFromSession) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) snack(context, 'Resumed your saved session.');
@@ -46,8 +52,9 @@ class _WorkoutState extends State<WorkoutScreen> {
   void dispose() {
     tm?.cancel();
     // Snapshot on the way out so an interrupted session can be recovered,
-    // unless the workout was already finished or discarded (which clears it).
-    if (!_finished && !_blockedByOtherSession) _persist();
+    // unless the workout was already finished or discarded (which clears it)
+    // or the routine was empty (nothing worth recovering).
+    if (!_finished && !_blockedByOtherSession && !_isEmptyRoutine) _persist();
     super.dispose();
   }
 
@@ -155,7 +162,8 @@ class _WorkoutState extends State<WorkoutScreen> {
   void _persist() {
     // Never snapshot over a saved session that belongs to a different
     // routine; that progress is only replaced after explicit confirmation.
-    if (_blockedByOtherSession) return;
+    // Empty sessions are not worth recovering either.
+    if (_blockedByOtherSession || _isEmptyRoutine) return;
     store.d['activeW'] = {
       'rid': _rid,
       'name': widget.r['name'],
@@ -258,7 +266,7 @@ class _WorkoutState extends State<WorkoutScreen> {
       return;
     }
     store.hist.add({
-      'n': widget.r['name'],
+      'n': '${widget.r['name'] ?? 'Workout'}',
       'd': today(),
       'min': secs < 60 ? 1 : (secs / 60).round(),
       'ex': n,
@@ -300,7 +308,11 @@ class _WorkoutState extends State<WorkoutScreen> {
         }
       },
       child: screen([
-        hdr(context, 'Strength · Live session', widget.r['name']),
+        hdr(
+          context,
+          'Strength · Live session',
+          '${widget.r['name'] ?? 'Workout'}',
+        ),
         card(
           color: kDk,
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -314,6 +326,23 @@ class _WorkoutState extends State<WorkoutScreen> {
             bar(nDone / max(1, exs.length), dark: true),
           ]),
         ),
+        if (_isEmptyRoutine)
+          card(
+            child: Column(
+              children: [
+                const Text(
+                  'This routine has no exercises.',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: kGapSm),
+                Text(
+                  'Add exercises to it from Routines, or discard this session.',
+                  style: muted,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
         if (restLeft > 0)
           card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -334,7 +363,25 @@ class _WorkoutState extends State<WorkoutScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               tag('EXERCISE ${i + 1} OF ${exs.length}'),
               const SizedBox(height: kGapSm),
-              Text(exs[i]['n'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              Row(
+                children: [
+                  Icon(
+                    exerciseIconFor(exs[i]['n'], exs[i]['m']),
+                    color: primaryOf(context),
+                    size: 24,
+                  ),
+                  const SizedBox(width: kGapSm),
+                  Expanded(
+                    child: Text(
+                      exs[i]['n'],
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: kGapXs),
               Text('${exs[i]['s']} sets × ${exs[i]['r']} · ${exs[i]['rest']} sec rest', style: muted),
               const SizedBox(height: kGapSm),

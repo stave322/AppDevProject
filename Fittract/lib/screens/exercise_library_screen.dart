@@ -428,7 +428,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
           CircleAvatar(
             backgroundColor: tintOf(context),
             child: Icon(
-              Icons.fitness_center,
+              exerciseIconFor(name, exercise['m']),
               color: primaryOf(context),
               size: 19,
             ),

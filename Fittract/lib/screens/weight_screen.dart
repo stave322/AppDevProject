@@ -50,8 +50,8 @@ class WeightScreen extends StatefulWidget {
 class _WeightState extends State<WeightScreen> {
   int per = 1;
   late final tw = TextEditingController(
-    text: (store.goal['w'] as num).toDouble() > 0
-        ? _displayWeight((store.goal['w'] as num).toDouble()).toStringAsFixed(1)
+    text: store.goalField('w') > 0
+        ? _displayWeight(store.goalField('w')).toStringAsFixed(1)
         : '',
   );
   late final td = TextEditingController(text: '${store.goal['d']}');
@@ -63,10 +63,9 @@ class _WeightState extends State<WeightScreen> {
 
   String get _unit => store.on('lb') ? 'lb' : 'kg';
 
-  /// Weekly workout target, decoded tolerantly (legacy snapshots may hold
-  /// the value as a double) and clamped to the supported 1–7 range.
-  int _weeklyGoal() =>
-      (((store.goal['wk'] as num?) ?? 3).toInt()).clamp(1, 7);
+  /// Weekly workout target from the store, decoded tolerantly (legacy
+  /// snapshots may hold a double or lack the key) and clamped to 1–7.
+  int _weeklyGoal() => store.weeklyWorkoutGoal;
 
   double _displayWeight(double kg) => store.on('lb') ? kg * 2.2046 : kg;
 
@@ -90,8 +89,8 @@ class _WeightState extends State<WeightScreen> {
     final vals = pts.map<double>((x) => (x[1] as num).toDouble()).toList();
     final hasWeight = ws.isNotEmpty;
     final diff = vals.length < 2 ? 0.0 : vals.first - vals.last;
-    final sw = (store.goal['sw'] as num).toDouble();
-    final gw = (store.goal['w'] as num).toDouble();
+    final sw = store.goalField('sw');
+    final gw = store.goalField('w');
     final prog = store.goalProgress();
     return screen([
       hdr(c, 'Weight & goals', 'Stronger, steadily.', back: true),
@@ -342,7 +341,7 @@ class _WeightState extends State<WeightScreen> {
     }
     final weight = _weightInKg(entered);
     final weights = store.d['weights'] as List;
-    if (weights.isEmpty && (store.goal['sw'] as num) == 0) {
+    if (weights.isEmpty && store.goalField('sw') == 0) {
       store.goal['sw'] = weight;
     }
     weights.removeWhere((entry) => entry[0] == today());
