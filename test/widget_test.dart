@@ -337,7 +337,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Nothing planned yet'), findsOneWidget);
+    expect(find.text('Nothing scheduled'), findsOneWidget);
     expect(find.text('Choose a routine'), findsOneWidget);
     expect(find.text('Schedule a workout'), findsOneWidget);
     expect(find.textContaining("Let's go, there"), findsNothing);

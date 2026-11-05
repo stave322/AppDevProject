@@ -247,7 +247,7 @@ class _TodayTabState extends State<TodayTab> {
               fontWeight: FontWeight.w800,
             ),
           ),
-          Text('Workout in progress', style: TextStyle(color: detailColor)),
+          Text('WORKOUT IN PROGRESS', style: TextStyle(color: detailColor)),
           const SizedBox(height: kGapMd),
           SizedBox(
             width: double.infinity,
@@ -354,9 +354,10 @@ class _TodayTabState extends State<TodayTab> {
             ),
           ),
           Text(
-            'This scheduled routine was removed.',
+            'This scheduled routine was deleted.',
             style: TextStyle(color: detailColor),
           ),
+          Text('(deleted routine)', style: TextStyle(color: detailColor)),
           const SizedBox(height: kGapMd),
           SizedBox(
             width: double.infinity,
@@ -375,7 +376,7 @@ class _TodayTabState extends State<TodayTab> {
           const _HeroEyebrow('TODAY\'S WORKOUT'),
           const SizedBox(height: kGapSm),
           Text(
-            'Nothing planned yet',
+            'Nothing scheduled',
             style: TextStyle(
               color: titleColor,
               fontSize: 22,
